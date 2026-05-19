@@ -238,6 +238,19 @@ Silakan renew membership.
 💎 Welcome to LISYA BOT
 
 Premium Converter Tools
+Fast • Secure • Premium
+
+✅ TXT → VCF
+✅ VCF → TXT
+✅ XLS → TXT
+✅ CSV → TXT
+✅ MSG → VCF
+✅ Merge & Split Files
+
+🔥 Upgrade premium untuk unlock semua fitur.
+
+📢 Jangan lupa join group official:
+https://t.me/+RnXaaNZLYG5lN2Vl
 `,
 {
   ...Markup.keyboard([
