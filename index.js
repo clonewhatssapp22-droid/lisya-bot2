@@ -12,6 +12,11 @@ const {
   Markup
 } = require("telegraf");
 
+const OWNER_ID = "6551372143";
+function isAdmin(ctx) {
+  return String(ctx.from.id) === OWNER_ID;
+}
+
 // =========================
 // BOT
 // =========================
@@ -61,6 +66,15 @@ new mongoose.Schema({
     default: 0,
   },
 
+  banned: {
+  type: Boolean,
+  default: false,
+},
+
+totalConvert: {
+  type: Number,
+  default: 0,
+},
 });
 
 const User =
@@ -156,6 +170,7 @@ bot.start(async (ctx) => {
       String(ctx.from.id),
     });
 
+  // CREATE USER
   if (!user) {
 
     user = await User.create({
@@ -170,6 +185,54 @@ bot.start(async (ctx) => {
     });
 
   }
+
+  // =========================
+// CHECK EXPIRED FUNCTION
+// =========================
+
+async function checkExpiredUsers() {
+
+  const now = new Date();
+
+  const expiredUsers =
+    await User.find({
+
+      premiumExpired: {
+        $lte: now,
+      },
+
+      status: "ACTIVE",
+
+    });
+
+  for (const user of expiredUsers) {
+
+    user.status = "INACTIVE";
+
+    user.premiumExpired = null;
+
+    await user.save();
+
+    try {
+
+      await bot.telegram.sendMessage(
+        user.telegramId,
+`
+❌ Premium expired
+
+Silakan renew membership.
+`
+      );
+
+    } catch (err) {}
+
+  }
+
+}
+
+  // =========================
+  // START MESSAGE
+  // =========================
 
   ctx.reply(`
 💎 Welcome to LISYA BOT
@@ -906,10 +969,142 @@ bot.catch((err) => {
 
 });
 
+bot.command("stats", async (ctx) => {
+
+  if (!isAdmin(ctx)) {
+    return ctx.reply("❌ Admin only");
+  }
+
+  const totalUsers =
+    await User.countDocuments();
+
+  const premiumUsers =
+    await User.countDocuments({
+      status: "ACTIVE",
+    });
+
+  const bannedUsers =
+    await User.countDocuments({
+      banned: true,
+    });
+
+  const users =
+    await User.find();
+
+  const totalBalance =
+    users.reduce(
+      (acc, user) =>
+        acc + user.balance,
+      0
+    );
+
+  ctx.reply(`
+📊 BOT STATISTICS
+
+👥 Total Users : ${totalUsers}
+💎 Premium Users : ${premiumUsers}
+🚫 Banned Users : ${bannedUsers}
+💰 Total Balance : Rp${totalBalance}
+`);
+
+});
+
+bot.command("broadcast", async (ctx) => {
+
+  if (!isAdmin(ctx)) {
+    return ctx.reply("❌ Admin only");
+  }
+
+  const message =
+    ctx.message.text.replace(
+      "/broadcast ",
+      ""
+    );
+
+  if (!message) {
+    return ctx.reply(`
+Format:
+/broadcast pesan
+`);
+  }
+
+  const users =
+    await User.find();
+
+  let success = 0;
+
+  for (const user of users) {
+
+    try {
+
+      await bot.telegram.sendMessage(
+        user.telegramId,
+        `
+📢 BROADCAST
+
+${message}
+`
+      );
+
+      success++;
+
+    } catch (err) {}
+
+  }
+
+  ctx.reply(`
+✅ Broadcast selesai
+
+📨 Terkirim : ${success}
+`);
+
+});
+
+bot.command("ban", async (ctx) => {
+
+  if (!isAdmin(ctx)) {
+    return ctx.reply("❌ Admin only");
+  }
+
+  const args =
+    ctx.message.text.split(" ");
+
+  const userId = args[1];
+
+  if (!userId) {
+    return ctx.reply(`
+Format:
+/ban userid
+`);
+  }
+
+  await User.findOneAndUpdate(
+    {
+      telegramId: String(userId),
+    },
+    {
+      banned: true,
+    }
+  );
+
+  ctx.reply(`
+🚫 User berhasil dibanned
+`);
+
+});
+
 // =========================
 // LAUNCH
 // =========================
 
 bot.launch();
+
+checkExpiredUsers();
+
+setInterval(() => {
+
+  checkExpiredUsers();
+
+}, 1000 * 60 * 60);
 
 console.log("🚀 LISYA BOT RUNNING");
