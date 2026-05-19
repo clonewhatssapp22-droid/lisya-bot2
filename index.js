@@ -75,6 +75,21 @@ totalConvert: {
   type: Number,
   default: 0,
 },
+
+refBy: {
+  type: String,
+  default: null,
+},
+
+referralCount: {
+  type: Number,
+  default: 0,
+},
+
+convertHistory: {
+  type: Array,
+  default: [],
+},
 });
 
 const User =
@@ -83,7 +98,7 @@ mongoose.model("User", userSchema);
 // =========================
 // SESSION
 // =========================
-
+const activeProcesses = new Set();
 const userSessions = {};
 
 // =========================
@@ -158,6 +173,23 @@ async function checkPremium(ctx) {
 
 }
 
+function isProcessing(userId) {
+
+  return activeProcesses.has(userId);
+
+}
+
+function startProcess(userId) {
+
+  activeProcesses.add(userId);
+
+}
+
+function endProcess(userId) {
+
+  activeProcesses.delete(userId);
+
+}
 // =========================
 // START
 // =========================
@@ -185,6 +217,14 @@ bot.start(async (ctx) => {
     });
 
   }
+
+  if (user?.banned) {
+
+  return ctx.reply(`
+🚫 oui tod lu dibanned dari bot
+`);
+
+}
 
   // =========================
 // CHECK EXPIRED FUNCTION
@@ -570,6 +610,18 @@ async (ctx) => {
 bot.hears("♻️ VCF → TXT",
 async (ctx) => {
 
+  if (isProcessing(ctx.from.id)) {
+
+  return ctx.reply(`
+⏳ Masih ada proses berjalan
+
+Tunggu sampai selesai.
+`);
+
+}
+
+startProcess(ctx.from.id);
+
   if (!(await checkPremium(ctx))) {
 
     return ctx.reply(
@@ -709,6 +761,24 @@ async (ctx) => {
 ✅ VCF berhasil
 `);
 
+const user =
+  await User.findOne({
+    telegramId:
+    String(ctx.from.id),
+  });
+
+user.totalConvert += 1;
+
+user.convertHistory.push({
+
+  type: "TXT → VCF",
+
+  date: new Date(),
+
+});
+
+await user.save();
+
     }
 
   } catch (err) {
@@ -841,6 +911,24 @@ END:VCARD
 ✅ TXT → VCF berhasil
 `);
 
+const user =
+  await User.findOne({
+    telegramId:
+    String(ctx.from.id),
+  });
+
+user.totalConvert += 1;
+
+user.convertHistory.push({
+
+  type: "TXT → VCF",
+
+  date: new Date(),
+
+});
+
+await user.save();
+
     }
 
     // MSG -> VCF
@@ -956,6 +1044,24 @@ END:VCARD
       return ctx.reply(`
 ✅ MSG → VCF berhasil
 `);
+
+const user =
+  await User.findOne({
+    telegramId:
+    String(ctx.from.id),
+  });
+
+user.totalConvert += 1;
+
+user.convertHistory.push({
+
+  type: "TXT → VCF",
+
+  date: new Date(),
+
+});
+
+await user.save();
 
     }
 
@@ -1102,6 +1208,96 @@ Format:
 
   ctx.reply(`
 🚫 User berhasil dibanned
+`);
+
+});
+
+// =========================
+// BAN USER
+// =========================
+
+bot.command("ban", async (ctx) => {
+
+  if (!isAdmin(ctx)) {
+    return ctx.reply("❌ Admin only");
+  }
+
+  const args =
+    ctx.message.text.split(" ");
+
+  const userId = args[1];
+
+  if (!userId) {
+
+    return ctx.reply(`
+Format:
+/ban userid
+`);
+
+  }
+
+  const user =
+    await User.findOne({
+      telegramId: String(userId),
+    });
+
+  if (!user) {
+    return ctx.reply("❌ User tidak ditemukan");
+  }
+
+  user.banned = true;
+
+  await user.save();
+
+  ctx.reply(`
+🚫 User berhasil dibanned
+
+🆔 ${userId}
+`);
+
+});
+
+// =========================
+// UNBAN USER
+// =========================
+
+bot.command("unban", async (ctx) => {
+
+  if (!isAdmin(ctx)) {
+    return ctx.reply("❌ Admin only");
+  }
+
+  const args =
+    ctx.message.text.split(" ");
+
+  const userId = args[1];
+
+  if (!userId) {
+
+    return ctx.reply(`
+Format:
+/unban userid
+`);
+
+  }
+
+  const user =
+    await User.findOne({
+      telegramId: String(userId),
+    });
+
+  if (!user) {
+    return ctx.reply("❌ User tidak ditemukan");
+  }
+
+  user.banned = false;
+
+  await user.save();
+
+  ctx.reply(`
+✅ User berhasil diunban
+
+🆔 ${userId}
 `);
 
 });
