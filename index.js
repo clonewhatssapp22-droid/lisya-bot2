@@ -800,17 +800,17 @@ bot.on("document", async (ctx) => {
 ✅ VCF → TXT berhasil
 `);
 
-    }
+}
 
-  } catch (err) {
+} catch (err) {
 
-    console.log(err);
+  console.log(err);
 
-    endProcess(ctx.from.id);
+  endProcess(ctx.from.id);
 
-    ctx.reply("❌ Error");
+  ctx.reply("❌ Error");
 
-  }
+}
 
 });
 
