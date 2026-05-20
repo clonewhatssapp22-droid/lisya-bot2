@@ -1,3 +1,4 @@
+ HEAD
 
 
 const fs = require("fs");
@@ -693,37 +694,32 @@ async (ctx) => {
 
 });
 
+
 // =========================
 // DOCUMENT
 // =========================
 
-bot.on("document",
-async (ctx) => {
+bot.on("document", async (ctx) => {
 
   try {
 
     const session =
-      userSessions[
-        ctx.from.id
-      ];
+      userSessions[ctx.from.id];
 
     if (!session) return;
 
     const fileId =
       ctx.message.document.file_id;
 
+    // =========================
     // TXT -> VCF
+    // =========================
 
-    if (
-      session.step ===
-      "TXT_UPLOAD"
-    ) {
+    if (session.step === "TXT_UPLOAD") {
 
-      session.fileId =
-        fileId;
+      session.fileId = fileId;
 
-      session.step =
-        "TXT_FILENAME";
+      session.step = "TXT_FILENAME";
 
       return ctx.reply(`
 📁 Masukkan nama file
@@ -731,36 +727,28 @@ async (ctx) => {
 
     }
 
+    // =========================
     // VCF -> TXT
+    // =========================
 
-    if (
-      session.step ===
-      "VCF_UPLOAD"
-    ) {
+    if (session.step === "VCF_UPLOAD") {
 
       const content =
-        await getFileContent(
-          fileId
-        );
+        await getFileContent(fileId);
 
       const regex =
-/TEL[^:]*:(.+)/g;
+        /TEL[^:]*:(.+)/g;
 
       let numbers = [];
 
       let match;
 
       while (
-        (
-          match =
-          regex.exec(content)
-        ) !== null
+        (match = regex.exec(content)) !== null
       ) {
 
         numbers.push(
-          cleanNumber(
-            match[1]
-          )
+          cleanNumber(match[1])
         );
 
       }
@@ -772,66 +760,53 @@ async (ctx) => {
 
       await ctx.replyWithDocument({
 
-  source:
-  "contacts.txt",
+        source: "contacts.txt",
 
-});
+      });
 
-const user =
-  await User.findOne({
-    telegramId:
-    String(ctx.from.id),
-  });
+      const user =
+        await User.findOne({
 
-user.totalConvert += 1;
+          telegramId:
+          String(ctx.from.id),
 
-user.convertHistory.push({
+        });
 
-  type: "VCF → TXT",
+      if (user) {
 
-  date: new Date(),
+        user.totalConvert += 1;
 
-});
+        user.convertHistory.push({
 
-await user.save();
+          type: "VCF → TXT",
 
-fs.unlinkSync(
-  "contacts.txt"
-);
+          date: new Date(),
 
-delete userSessions[
-  ctx.from.id
-];
+        });
 
-endProcess(ctx.from.id);
+        await user.save();
 
-return ctx.reply(`
+      }
+
+      fs.unlinkSync("contacts.txt");
+
+      delete userSessions[
+        ctx.from.id
+      ];
+
+      endProcess(ctx.from.id);
+
+      return ctx.reply(`
 ✅ VCF → TXT berhasil
 `);
-
-const user =
-  await User.findOne({
-    telegramId:
-    String(ctx.from.id),
-  });
-
-user.totalConvert += 1;
-
-user.convertHistory.push({
-
-  type: "TXT → VCF",
-
-  date: new Date(),
-
-});
-
-await user.save();
 
     }
 
   } catch (err) {
 
     console.log(err);
+
+    endProcess(ctx.from.id);
 
     ctx.reply("❌ Error");
 
@@ -843,24 +818,20 @@ await user.save();
 // TEXT
 // =========================
 
-bot.on("text",
-async (ctx) => {
+bot.on("text", async (ctx) => {
 
   try {
 
     const session =
-      userSessions[
-        ctx.from.id
-      ];
+      userSessions[ctx.from.id];
 
     if (!session) return;
 
+    // =========================
     // TXT FILENAME
+    // =========================
 
-    if (
-      session.step ===
-      "TXT_FILENAME"
-    ) {
+    if (session.step === "TXT_FILENAME") {
 
       session.output =
         ctx.message.text;
@@ -874,12 +845,11 @@ async (ctx) => {
 
     }
 
+    // =========================
     // TXT CONTACT
+    // =========================
 
-    if (
-      session.step ===
-      "TXT_CONTACT"
-    ) {
+    if (session.step === "TXT_CONTACT") {
 
       session.contact =
         ctx.message.text;
@@ -893,17 +863,14 @@ async (ctx) => {
 
     }
 
+    // =========================
     // TXT GENERATE
+    // =========================
 
-    if (
-      session.step ===
-      "TXT_START"
-    ) {
+    if (session.step === "TXT_START") {
 
       const start =
-        parseInt(
-          ctx.message.text
-        );
+        parseInt(ctx.message.text);
 
       const content =
         await getFileContent(
@@ -913,9 +880,7 @@ async (ctx) => {
       const numbers =
         content
         .split(/\r?\n/)
-        .map(v =>
-          cleanNumber(v)
-        )
+        .map(v => cleanNumber(v))
         .filter(v => v);
 
       let vcf = "";
@@ -942,69 +907,53 @@ END:VCARD
 
       await ctx.replyWithDocument({
 
-  source:
-  finalFile,
+        source: finalFile,
 
-});
+      });
 
-const user =
-  await User.findOne({
-    telegramId:
-    String(ctx.from.id),
-  });
+      const user =
+        await User.findOne({
 
-user.totalConvert += 1;
+          telegramId:
+          String(ctx.from.id),
 
-user.convertHistory.push({
+        });
 
-  type: "TXT → VCF",
+      if (user) {
 
-  date: new Date(),
+        user.totalConvert += 1;
 
-});
+        user.convertHistory.push({
 
-await user.save();
+          type: "TXT → VCF",
 
-fs.unlinkSync(
-  finalFile
-);
+          date: new Date(),
 
-delete userSessions[
-  ctx.from.id
-];
+        });
 
-endProcess(ctx.from.id);
+        await user.save();
 
-return ctx.reply(`
+      }
+
+      fs.unlinkSync(finalFile);
+
+      delete userSessions[
+        ctx.from.id
+      ];
+
+      endProcess(ctx.from.id);
+
+      return ctx.reply(`
 ✅ TXT → VCF berhasil
 `);
 
-const user =
-  await User.findOne({
-    telegramId:
-    String(ctx.from.id),
-  });
-
-user.totalConvert += 1;
-
-user.convertHistory.push({
-
-  type: "TXT → VCF",
-
-  date: new Date(),
-
-});
-
-await user.save();
-
     }
 
+    // =========================
     // MSG -> VCF
+    // =========================
 
-    if (
-      session.step ===
-      "MSG_FILENAME"
-    ) {
+    if (session.step === "MSG_FILENAME") {
 
       session.output =
         ctx.message.text;
@@ -1018,10 +967,7 @@ await user.save();
 
     }
 
-    if (
-      session.step ===
-      "MSG_CONTACT"
-    ) {
+    if (session.step === "MSG_CONTACT") {
 
       session.contact =
         ctx.message.text;
@@ -1035,15 +981,10 @@ await user.save();
 
     }
 
-    if (
-      session.step ===
-      "MSG_START"
-    ) {
+    if (session.step === "MSG_START") {
 
       session.start =
-        parseInt(
-          ctx.message.text
-        );
+        parseInt(ctx.message.text);
 
       session.step =
         "MSG_NUMBERS";
@@ -1059,17 +1000,12 @@ Contoh:
 
     }
 
-    if (
-      session.step ===
-      "MSG_NUMBERS"
-    ) {
+    if (session.step === "MSG_NUMBERS") {
 
       const numbers =
         ctx.message.text
         .split(/\r?\n/)
-        .map(v =>
-          cleanNumber(v)
-        )
+        .map(v => cleanNumber(v))
         .filter(v => v);
 
       let vcf = "";
@@ -1096,66 +1032,53 @@ END:VCARD
 
       await ctx.replyWithDocument({
 
-  source:
-  finalFile,
+        source: finalFile,
 
-});
+      });
 
-const user =
-  await User.findOne({
-    telegramId:
-    String(ctx.from.id),
-  });
+      const user =
+        await User.findOne({
 
-user.totalConvert += 1;
+          telegramId:
+          String(ctx.from.id),
 
-user.convertHistory.push({
+        });
 
-  type: "MSG → VCF",
+      if (user) {
 
-  date: new Date(),
+        user.totalConvert += 1;
 
-});
+        user.convertHistory.push({
 
-await user.save();
+          type: "MSG → VCF",
 
-fs.unlinkSync(
-  finalFile
-);
+          date: new Date(),
 
-delete userSessions[
-  ctx.from.id
-];
+        });
 
-endProcess(ctx.from.id);
+        await user.save();
 
-return ctx.reply(`
+      }
+
+      fs.unlinkSync(finalFile);
+
+      delete userSessions[
+        ctx.from.id
+      ];
+
+      endProcess(ctx.from.id);
+
+      return ctx.reply(`
 ✅ MSG → VCF berhasil
 `);
-
-const user =
-  await User.findOne({
-    telegramId:
-    String(ctx.from.id),
-  });
-
-user.totalConvert += 1;
-
-user.convertHistory.push({
-
-  type: "TXT → VCF",
-
-  date: new Date(),
-
-});
-
-await user.save();
 
     }
 
   } catch (err) {
 
     console.log(err);
+
+    endProcess(ctx.from.id);
 
     ctx.reply("❌ Error");
 
@@ -1176,188 +1099,9 @@ bot.catch((err) => {
 
 });
 
-bot.command("stats", async (ctx) => {
-
-  if (!isAdmin(ctx)) {
-    return ctx.reply("❌ Admin only");
-  }
-
-  const totalUsers =
-    await User.countDocuments();
-
-  const premiumUsers =
-    await User.countDocuments({
-      status: "ACTIVE",
-    });
-
-  const bannedUsers =
-    await User.countDocuments({
-      banned: true,
-    });
-
-  const users =
-    await User.find();
-
-  const totalBalance =
-    users.reduce(
-      (acc, user) =>
-        acc + user.balance,
-      0
-    );
-
-  ctx.reply(`
-📊 BOT STATISTICS
-
-👥 Total Users : ${totalUsers}
-💎 Premium Users : ${premiumUsers}
-🚫 Banned Users : ${bannedUsers}
-💰 Total Balance : Rp${totalBalance}
-`);
-
-});
-
-bot.command("broadcast", async (ctx) => {
-
-  if (!isAdmin(ctx)) {
-    return ctx.reply("❌ Admin only");
-  }
-
-  const message =
-    ctx.message.text.replace(
-      "/broadcast ",
-      ""
-    );
-
-  if (!message) {
-    return ctx.reply(`
-Format:
-/broadcast pesan
-`);
-  }
-
-  const users =
-    await User.find();
-
-  let success = 0;
-
-  for (const user of users) {
-
-    try {
-
-      await bot.telegram.sendMessage(
-        user.telegramId,
-        `
-📢 BROADCAST
-
-${message}
-`
-      );
-
-      success++;
-
-    } catch (err) {}
-
-  }
-
-  ctx.reply(`
-✅ Broadcast selesai
-
-📨 Terkirim : ${success}
-`);
-
-});
-
-
-
 // =========================
-// BAN USER
+// PROCESS ERROR
 // =========================
-
-bot.command("ban", async (ctx) => {
-
-  if (!isAdmin(ctx)) {
-    return ctx.reply("❌ Admin only");
-  }
-
-  const args =
-    ctx.message.text.split(" ");
-
-  const userId = args[1];
-
-  if (!userId) {
-
-    return ctx.reply(`
-Format:
-/ban userid
-`);
-
-  }
-
-  const user =
-    await User.findOne({
-      telegramId: String(userId),
-    });
-
-  if (!user) {
-    return ctx.reply("❌ User tidak ditemukan");
-  }
-
-  user.banned = true;
-
-  await user.save();
-
-  ctx.reply(`
-🚫 User berhasil dibanned
-
-🆔 ${userId}
-`);
-
-});
-
-// =========================
-// UNBAN USER
-// =========================
-
-bot.command("unban", async (ctx) => {
-
-  if (!isAdmin(ctx)) {
-    return ctx.reply("❌ Admin only");
-  }
-
-  const args =
-    ctx.message.text.split(" ");
-
-  const userId = args[1];
-
-  if (!userId) {
-
-    return ctx.reply(`
-Format:
-/unban userid
-`);
-
-  }
-
-  const user =
-    await User.findOne({
-      telegramId: String(userId),
-    });
-
-  if (!user) {
-    return ctx.reply("❌ User tidak ditemukan");
-  }
-
-  user.banned = false;
-
-  await user.save();
-
-  ctx.reply(`
-✅ User berhasil diunban
-
-🆔 ${userId}
-`);
-
-});
 
 process.on(
   "unhandledRejection",
