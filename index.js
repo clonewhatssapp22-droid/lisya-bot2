@@ -740,7 +740,6 @@ bot.on("document", async (ctx) => {
         /TEL[^:]*:(.+)/g;
 
       let numbers = [];
-
       let match;
 
       while (
@@ -800,17 +799,17 @@ bot.on("document", async (ctx) => {
 ✅ VCF → TXT berhasil
 `);
 
-}
+    }
 
-} catch (err) {
+  } catch (err) {
 
-  console.log(err);
+    console.log(err);
 
-  endProcess(ctx.from.id);
+    endProcess(ctx.from.id);
 
-  ctx.reply("❌ Error");
+    return ctx.reply("❌ Error");
 
-}
+  }
 
 });
 
@@ -1080,7 +1079,7 @@ END:VCARD
 
     endProcess(ctx.from.id);
 
-    ctx.reply("❌ Error");
+    return ctx.reply("❌ Error");
 
   }
 
