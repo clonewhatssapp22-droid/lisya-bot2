@@ -190,6 +190,54 @@ function endProcess(userId) {
   activeProcesses.delete(userId);
 
 }
+
+// =========================
+// EXPIRED PREMIUM CHECKER
+// =========================
+
+async function checkExpiredUsers() {
+
+  const now = new Date();
+
+  const expiredUsers =
+    await User.find({
+
+      premiumExpired: {
+        $lte: now,
+      },
+
+      status: "ACTIVE",
+
+    });
+
+  for (const user of expiredUsers) {
+
+    user.status = "INACTIVE";
+
+    user.premiumExpired = null;
+
+    await user.save();
+
+    try {
+
+      await bot.telegram.sendMessage(
+        user.telegramId,
+`
+❌ Premium kamu telah expired
+
+Silakan renew membership.
+`
+      );
+
+    } catch (err) {
+
+      console.log(err);
+
+    }
+
+  }
+
+}
 // =========================
 // START
 // =========================
@@ -226,49 +274,7 @@ bot.start(async (ctx) => {
 
 }
 
-  // =========================
-// CHECK EXPIRED FUNCTION
-// =========================
-
-async function checkExpiredUsers() {
-
-  const now = new Date();
-
-  const expiredUsers =
-    await User.find({
-
-      premiumExpired: {
-        $lte: now,
-      },
-
-      status: "ACTIVE",
-
-    });
-
-  for (const user of expiredUsers) {
-
-    user.status = "INACTIVE";
-
-    user.premiumExpired = null;
-
-    await user.save();
-
-    try {
-
-      await bot.telegram.sendMessage(
-        user.telegramId,
-`
-❌ Premium expired
-
-Silakan renew membership.
-`
-      );
-
-    } catch (err) {}
-
-  }
-
-}
+ 
 
   // =========================
   // START MESSAGE
@@ -583,7 +589,21 @@ Format:
 bot.hears("📄 TXT → VCF",
 async (ctx) => {
 
+  if (isProcessing(ctx.from.id)) {
+
+    return ctx.reply(`
+⏳ Masih ada proses berjalan
+
+Tunggu sampai selesai.
+`);
+
+  }
+
+  startProcess(ctx.from.id);
+
   if (!(await checkPremium(ctx))) {
+
+    endProcess(ctx.from.id);
 
     return ctx.reply(
       "❌ Premium only"
@@ -748,17 +768,41 @@ async (ctx) => {
 
       await ctx.replyWithDocument({
 
-        source:
-        "contacts.txt",
+  source:
+  "contacts.txt",
 
-      });
+});
 
-      fs.unlinkSync(
-        "contacts.txt"
-      );
+const user =
+  await User.findOne({
+    telegramId:
+    String(ctx.from.id),
+  });
 
-      return ctx.reply(`
-✅ VCF berhasil
+user.totalConvert += 1;
+
+user.convertHistory.push({
+
+  type: "VCF → TXT",
+
+  date: new Date(),
+
+});
+
+await user.save();
+
+fs.unlinkSync(
+  "contacts.txt"
+);
+
+delete userSessions[
+  ctx.from.id
+];
+
+endProcess(ctx.from.id);
+
+return ctx.reply(`
+✅ VCF → TXT berhasil
 `);
 
 const user =
@@ -894,20 +938,40 @@ END:VCARD
 
       await ctx.replyWithDocument({
 
-        source:
-        finalFile,
+  source:
+  finalFile,
 
-      });
+});
 
-      fs.unlinkSync(
-        finalFile
-      );
+const user =
+  await User.findOne({
+    telegramId:
+    String(ctx.from.id),
+  });
 
-      delete userSessions[
-        ctx.from.id
-      ];
+user.totalConvert += 1;
 
-      return ctx.reply(`
+user.convertHistory.push({
+
+  type: "TXT → VCF",
+
+  date: new Date(),
+
+});
+
+await user.save();
+
+fs.unlinkSync(
+  finalFile
+);
+
+delete userSessions[
+  ctx.from.id
+];
+
+endProcess(ctx.from.id);
+
+return ctx.reply(`
 ✅ TXT → VCF berhasil
 `);
 
@@ -1028,20 +1092,40 @@ END:VCARD
 
       await ctx.replyWithDocument({
 
-        source:
-        finalFile,
+  source:
+  finalFile,
 
-      });
+});
 
-      fs.unlinkSync(
-        finalFile
-      );
+const user =
+  await User.findOne({
+    telegramId:
+    String(ctx.from.id),
+  });
 
-      delete userSessions[
-        ctx.from.id
-      ];
+user.totalConvert += 1;
 
-      return ctx.reply(`
+user.convertHistory.push({
+
+  type: "MSG → VCF",
+
+  date: new Date(),
+
+});
+
+await user.save();
+
+fs.unlinkSync(
+  finalFile
+);
+
+delete userSessions[
+  ctx.from.id
+];
+
+endProcess(ctx.from.id);
+
+return ctx.reply(`
 ✅ MSG → VCF berhasil
 `);
 
@@ -1179,38 +1263,7 @@ ${message}
 
 });
 
-bot.command("ban", async (ctx) => {
 
-  if (!isAdmin(ctx)) {
-    return ctx.reply("❌ Admin only");
-  }
-
-  const args =
-    ctx.message.text.split(" ");
-
-  const userId = args[1];
-
-  if (!userId) {
-    return ctx.reply(`
-Format:
-/ban userid
-`);
-  }
-
-  await User.findOneAndUpdate(
-    {
-      telegramId: String(userId),
-    },
-    {
-      banned: true,
-    }
-  );
-
-  ctx.reply(`
-🚫 User berhasil dibanned
-`);
-
-});
 
 // =========================
 // BAN USER
@@ -1301,6 +1354,24 @@ Format:
 `);
 
 });
+
+process.on(
+  "unhandledRejection",
+  (err) => {
+
+    console.log(err);
+
+  }
+);
+
+process.on(
+  "uncaughtException",
+  (err) => {
+
+    console.log(err);
+
+  }
+);
 
 // =========================
 // LAUNCH
