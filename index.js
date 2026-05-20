@@ -20,6 +20,10 @@ function isAdmin(ctx) {
 // =========================
 // BOT
 // =========================
+console.log(
+  "BOT TOKEN:",
+  process.env.BOT_TOKEN
+);
 
 const bot =
   new Telegraf(process.env.BOT_TOKEN);
@@ -1377,14 +1381,19 @@ process.on(
 // LAUNCH
 // =========================
 
-bot.launch();
+bot.launch()
+.then(() => {
 
-checkExpiredUsers();
+  console.log(
+    "🚀 BOT SUCCESS ONLINE"
+  );
 
-setInterval(() => {
+})
+.catch((err) => {
 
-  checkExpiredUsers();
+  console.log(
+    "❌ BOT LAUNCH ERROR:",
+    err
+  );
 
-}, 1000 * 60 * 60);
-
-console.log("🚀 LISYA BOT RUNNING");
+});
