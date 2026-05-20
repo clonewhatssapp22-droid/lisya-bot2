@@ -758,32 +758,25 @@ bot.on("document", async (ctx) => {
       );
 
       await ctx.replyWithDocument({
-
         source: "contacts.txt",
-
       });
 
-      const user =
+      const currentUser =
         await User.findOne({
-
           telegramId:
           String(ctx.from.id),
-
         });
 
-      if (user) {
+      if (currentUser) {
 
-        user.totalConvert += 1;
+        currentUser.totalConvert += 1;
 
-        user.convertHistory.push({
-
+        currentUser.convertHistory.push({
           type: "VCF → TXT",
-
           date: new Date(),
-
         });
 
-        await user.save();
+        await currentUser.save();
 
       }
 
@@ -863,7 +856,7 @@ bot.on("text", async (ctx) => {
     }
 
     // =========================
-    // TXT GENERATE
+    // TXT START
     // =========================
 
     if (session.step === "TXT_START") {
@@ -905,32 +898,25 @@ END:VCARD
       );
 
       await ctx.replyWithDocument({
-
         source: finalFile,
-
       });
 
-      const user =
+      const currentUser =
         await User.findOne({
-
           telegramId:
           String(ctx.from.id),
-
         });
 
-      if (user) {
+      if (currentUser) {
 
-        user.totalConvert += 1;
+        currentUser.totalConvert += 1;
 
-        user.convertHistory.push({
-
+        currentUser.convertHistory.push({
           type: "TXT → VCF",
-
           date: new Date(),
-
         });
 
-        await user.save();
+        await currentUser.save();
 
       }
 
@@ -1030,32 +1016,25 @@ END:VCARD
       );
 
       await ctx.replyWithDocument({
-
         source: finalFile,
-
       });
 
-      const user =
+      const currentUser =
         await User.findOne({
-
           telegramId:
           String(ctx.from.id),
-
         });
 
-      if (user) {
+      if (currentUser) {
 
-        user.totalConvert += 1;
+        currentUser.totalConvert += 1;
 
-        user.convertHistory.push({
-
+        currentUser.convertHistory.push({
           type: "MSG → VCF",
-
           date: new Date(),
-
         });
 
-        await user.save();
+        await currentUser.save();
 
       }
 
