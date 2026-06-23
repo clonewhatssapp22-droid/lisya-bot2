@@ -587,6 +587,183 @@ Format:
 });
 
 // =========================
+// ADMIN - CEK USER AKTIF
+// =========================
+
+bot.command("cekuser",
+async (ctx) => {
+
+  if (!isAdmin(ctx)) {
+    return ctx.reply("❌ Khusus owner");
+  }
+
+  const args =
+    ctx.message.text.split(" ");
+
+  const userId = args[1];
+
+  if (!userId) {
+    return ctx.reply(`
+Format:
+/cekuser userid
+`);
+  }
+
+  const user =
+    await User.findOne({
+      telegramId: String(userId),
+    });
+
+  if (!user) {
+    return ctx.reply("❌ User tidak ditemukan");
+  }
+
+  let expired = "Tidak aktif";
+
+  if (user.premiumExpired) {
+    expired = new Date(
+      user.premiumExpired
+    ).toLocaleString("id-ID");
+  }
+
+  ctx.reply(`
+👤 INFO USER
+
+🆔 ID : ${user.telegramId}
+📛 Username : @${user.username || "Tidak ada"}
+💎 Status : ${user.status}
+⏳ Expired : ${expired}
+💰 Saldo : Rp${user.balance}
+🔄 Total Convert : ${user.totalConvert}
+🚫 Banned : ${user.banned ? "Ya" : "Tidak"}
+`);
+
+});
+
+// =========================
+// ADMIN - PUTUSKAN USER AKTIF
+// =========================
+
+bot.command("putususer",
+async (ctx) => {
+
+  if (!isAdmin(ctx)) {
+    return ctx.reply("❌ Khusus owner");
+  }
+
+  const args =
+    ctx.message.text.split(" ");
+
+  const userId = args[1];
+
+  if (!userId) {
+    return ctx.reply(`
+Format:
+/putususer userid
+`);
+  }
+
+  const user =
+    await User.findOne({
+      telegramId: String(userId),
+    });
+
+  if (!user) {
+    return ctx.reply("❌ User tidak ditemukan");
+  }
+
+  user.status = "INACTIVE";
+  user.premiumExpired = null;
+
+  await user.save();
+
+  try {
+    await bot.telegram.sendMessage(
+      userId,
+`
+❌ Premium kamu telah dinonaktifkan oleh admin.
+
+Silakan hubungi admin untuk info lebih lanjut.
+`
+    );
+  } catch (err) {
+    console.log(err);
+  }
+
+  ctx.reply(`
+✅ User berhasil dinonaktifkan
+
+🆔 User : ${userId}
+💎 Status : INACTIVE
+`);
+
+});
+
+// =========================
+// ADMIN - AKTIFKAN USER 30 HARI
+// =========================
+
+bot.command("aktifuser",
+async (ctx) => {
+
+  if (!isAdmin(ctx)) {
+    return ctx.reply("❌ Khusus owner");
+  }
+
+  const args =
+    ctx.message.text.split(" ");
+
+  const userId = args[1];
+
+  if (!userId) {
+    return ctx.reply(`
+Format:
+/aktifuser userid
+`);
+  }
+
+  const user =
+    await User.findOne({
+      telegramId: String(userId),
+    });
+
+  if (!user) {
+    return ctx.reply("❌ User tidak ditemukan");
+  }
+
+  const expired = new Date();
+  expired.setDate(expired.getDate() + 30);
+
+  user.status = "ACTIVE";
+  user.premiumExpired = expired;
+
+  await user.save();
+
+  try {
+    await bot.telegram.sendMessage(
+      userId,
+`
+✅ Premium kamu telah diaktifkan oleh admin!
+
+💎 Durasi : 30 Hari
+⏳ Expired : ${expired.toLocaleString("id-ID")}
+`
+    );
+  } catch (err) {
+    console.log(err);
+  }
+
+  ctx.reply(`
+✅ User berhasil diaktifkan
+
+🆔 User : ${userId}
+💎 Status : ACTIVE
+⏳ Expired : ${expired.toLocaleString("id-ID")}
+`);
+
+});
+
+// =========================
 // TXT -> VCF
 // =========================
 
