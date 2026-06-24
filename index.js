@@ -520,6 +520,7 @@ async (ctx) => {
     return ctx.reply("❌ Khusus owner");
   }
 
+  delete userSessions[ctx.from.id];
   userSessions[ctx.from.id] = {
     step: "ADMIN_CEKUSER",
   };
@@ -539,6 +540,7 @@ async (ctx) => {
     return ctx.reply("❌ Khusus owner");
   }
 
+  delete userSessions[ctx.from.id];
   userSessions[ctx.from.id] = {
     step: "ADMIN_AKTIFKAN",
   };
@@ -558,6 +560,7 @@ async (ctx) => {
     return ctx.reply("❌ Khusus owner");
   }
 
+  delete userSessions[ctx.from.id];
   userSessions[ctx.from.id] = {
     step: "ADMIN_PUTUSKAN",
   };
@@ -1232,6 +1235,10 @@ END:VCARD
 
       const userId = ctx.message.text.trim();
 
+      if (!/^\d+$/.test(userId)) {
+        return ctx.reply("❌ ID tidak valid. Masukkan ID angka saja. Contoh: 6551372143");
+      }
+
       const user = await User.findOne({ telegramId: String(userId) });
 
       delete userSessions[ctx.from.id];
@@ -1266,6 +1273,11 @@ END:VCARD
     if (session.step === "ADMIN_AKTIFKAN") {
 
       const userId = ctx.message.text.trim();
+
+      // Validasi: harus angka
+      if (!/^\d+$/.test(userId)) {
+        return ctx.reply("❌ ID tidak valid. Masukkan ID angka saja. Contoh: 6551372143");
+      }
 
       const user = await User.findOne({ telegramId: String(userId) });
 
@@ -1308,6 +1320,10 @@ END:VCARD
     if (session.step === "ADMIN_PUTUSKAN") {
 
       const userId = ctx.message.text.trim();
+
+      if (!/^\d+$/.test(userId)) {
+        return ctx.reply("❌ ID tidak valid. Masukkan ID angka saja. Contoh: 6551372143");
+      }
 
       const user = await User.findOne({ telegramId: String(userId) });
 
