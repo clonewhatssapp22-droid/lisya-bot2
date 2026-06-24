@@ -20,84 +20,36 @@ function isAdmin(ctx) {
 // =========================
 // BOT
 // =========================
-console.log(
-  "BOT TOKEN:",
-  process.env.BOT_TOKEN
-);
+console.log("BOT TOKEN:", process.env.BOT_TOKEN);
 
-const bot =
-  new Telegraf(process.env.BOT_TOKEN);
+const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // =========================
 // MONGODB
 // =========================
 
 mongoose.connect(process.env.MONGO_URI)
-.then(() => {
-
-  console.log("✅ MongoDB Connected");
-
-})
-.catch((err) => {
-
-  console.log(err);
-
-});
+.then(() => { console.log("✅ MongoDB Connected"); })
+.catch((err) => { console.log(err); });
 
 // =========================
 // SCHEMA
 // =========================
 
-const userSchema =
-new mongoose.Schema({
-
+const userSchema = new mongoose.Schema({
   telegramId: String,
-
   username: String,
-
-  status: {
-    type: String,
-    default: "INACTIVE",
-  },
-
-  premiumExpired: {
-    type: Date,
-    default: null,
-  },
-
-  balance: {
-    type: Number,
-    default: 0,
-  },
-
-  banned: {
-  type: Boolean,
-  default: false,
-},
-
-totalConvert: {
-  type: Number,
-  default: 0,
-},
-
-refBy: {
-  type: String,
-  default: null,
-},
-
-referralCount: {
-  type: Number,
-  default: 0,
-},
-
-convertHistory: {
-  type: Array,
-  default: [],
-},
+  status: { type: String, default: "INACTIVE" },
+  premiumExpired: { type: Date, default: null },
+  balance: { type: Number, default: 0 },
+  banned: { type: Boolean, default: false },
+  totalConvert: { type: Number, default: 0 },
+  refBy: { type: String, default: null },
+  referralCount: { type: Number, default: 0 },
+  convertHistory: { type: Array, default: [] },
 });
 
-const User =
-mongoose.model("User", userSchema);
+const User = mongoose.model("User", userSchema);
 
 // =========================
 // SESSION
@@ -110,182 +62,80 @@ const userSessions = {};
 // =========================
 
 function cleanNumber(text) {
-
   if (!text) return "";
-
-  return String(text)
-    .replace(/\D/g, "");
-
+  return String(text).replace(/\D/g, "");
 }
 
 async function getFileContent(fileId) {
-
-  const file =
-    await bot.telegram.getFile(fileId);
-
-  const fileUrl =
-`https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
-
-  const response =
-    await axios.get(fileUrl);
-
+  const file = await bot.telegram.getFile(fileId);
+  const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
+  const response = await axios.get(fileUrl);
   return response.data;
-
 }
 
 async function getBuffer(fileId) {
-
-  const file =
-    await bot.telegram.getFile(fileId);
-
-  const fileUrl =
-`https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
-
-  const response =
-    await axios.get(fileUrl, {
-      responseType: "arraybuffer",
-    });
-
+  const file = await bot.telegram.getFile(fileId);
+  const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
+  const response = await axios.get(fileUrl, { responseType: "arraybuffer" });
   return response.data;
-
 }
 
 async function checkPremium(ctx) {
-
-  const user =
-    await User.findOne({
-      telegramId:
-      String(ctx.from.id),
-    });
-
+  const user = await User.findOne({ telegramId: String(ctx.from.id) });
   if (!user) return false;
-
-  if (
-    user.premiumExpired &&
-    new Date() > user.premiumExpired
-  ) {
-
+  if (user.premiumExpired && new Date() > user.premiumExpired) {
     user.status = "INACTIVE";
-
     user.premiumExpired = null;
-
     await user.save();
-
   }
-
   return user.status === "ACTIVE";
-
 }
 
-function isProcessing(userId) {
-
-  return activeProcesses.has(userId);
-
-}
-
-function startProcess(userId) {
-
-  activeProcesses.add(userId);
-
-}
-
-function endProcess(userId) {
-
-  activeProcesses.delete(userId);
-
-}
+function isProcessing(userId) { return activeProcesses.has(userId); }
+function startProcess(userId) { activeProcesses.add(userId); }
+function endProcess(userId) { activeProcesses.delete(userId); }
 
 // =========================
 // EXPIRED PREMIUM CHECKER
 // =========================
 
 async function checkExpiredUsers() {
-
   const now = new Date();
-
-  const expiredUsers =
-    await User.find({
-
-      premiumExpired: {
-        $lte: now,
-      },
-
-      status: "ACTIVE",
-
-    });
-
+  const expiredUsers = await User.find({ premiumExpired: { $lte: now }, status: "ACTIVE" });
   for (const user of expiredUsers) {
-
     user.status = "INACTIVE";
-
     user.premiumExpired = null;
-
     await user.save();
-
     try {
-
-      await bot.telegram.sendMessage(
-        user.telegramId,
-`
+      await bot.telegram.sendMessage(user.telegramId, `
 ❌ Premium kamu telah expired
 
 Silakan renew membership.
-`
-      );
-
-    } catch (err) {
-
-      console.log(err);
-
-    }
-
+`);
+    } catch (err) { console.log(err); }
   }
-
 }
+
 // =========================
 // START
 // =========================
 
 bot.start(async (ctx) => {
 
-  let user =
-    await User.findOne({
-      telegramId:
-      String(ctx.from.id),
-    });
+  let user = await User.findOne({ telegramId: String(ctx.from.id) });
 
-  // CREATE USER
   if (!user) {
-
     user = await User.create({
-
-      telegramId:
-      String(ctx.from.id),
-
-      username:
-      ctx.from.username ||
-      "no_username",
-
+      telegramId: String(ctx.from.id),
+      username: ctx.from.username || "no_username",
     });
-
   }
 
   if (user?.banned) {
-
-  return ctx.reply(`
-🚫 oui tod lu dibanned dari bot
-`);
-
-}
-
- 
-
-  // =========================
-  // START MESSAGE
-  // =========================
+    return ctx.reply(`🚫 oui tod lu dibanned dari bot`);
+  }
 
   if (isAdmin(ctx)) {
-
     return ctx.reply(
 `👑 Welcome Admin LISYA BOT
 
@@ -300,15 +150,11 @@ Contoh:
 /aktifkanuser 7835271216
 /cekuser 7835271216
 `,
-{
-  ...Markup.keyboard([
-
-    ["🏠 Menu Utama"],
-
-  ]).resize(),
-}
-);
-
+    {
+      ...Markup.keyboard([
+        ["🏠 Menu Utama"],
+      ]).resize(),
+    });
   }
 
   ctx.reply(`
@@ -329,42 +175,65 @@ Fast • Secure • Premium
 📢 Jangan lupa join group official:
 https://t.me/+RnXaaNZLYG5lN2Vl
 `,
-{
-  ...Markup.keyboard([
+  {
+    ...Markup.keyboard([
+      ["📄 TXT → VCF", "♻️ VCF → TXT"],
+      ["📊 XLS → TXT", "📁 CSV → TXT"],
+      ["💬 MSG → VCF"],
+      ["📎 Gabung TXT", "📇 Gabung VCF"],
+      ["✂️ Bagi TXT", "🧩 Bagi VCF"],
+      ["👤 Profile", "💎 Status"],
+      ["💰 Deposit", "🛒 Buy Premium"],
+    ]).resize(),
+  });
 
-    ["📄 TXT → VCF", "♻️ VCF → TXT"],
+});
 
-    ["📊 XLS → TXT", "📁 CSV → TXT"],
+// =========================
+// MENU UTAMA (ADMIN)
+// =========================
 
-    ["💬 MSG → VCF"],
+bot.hears("🏠 Menu Utama", async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  ctx.reply(`💎 Welcome to LISYA BOT`, {
+    ...Markup.keyboard([
+      ["📄 TXT → VCF", "♻️ VCF → TXT"],
+      ["📊 XLS → TXT", "📁 CSV → TXT"],
+      ["💬 MSG → VCF"],
+      ["📎 Gabung TXT", "📇 Gabung VCF"],
+      ["✂️ Bagi TXT", "🧩 Bagi VCF"],
+      ["👤 Profile", "💎 Status"],
+      ["💰 Deposit", "🛒 Buy Premium"],
+      ["👑 Menu Admin"],
+    ]).resize(),
+  });
+});
 
-    ["📎 Gabung TXT", "📇 Gabung VCF"],
+bot.hears("👑 Menu Admin", async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  ctx.reply(
+`👑 Menu Admin
 
-    ["✂️ Bagi TXT", "🧩 Bagi VCF"],
-
-    ["👤 Profile", "💎 Status"],
-
-    ["💰 Deposit", "🛒 Buy Premium"],
-
-  ]).resize(),
-}
-);
-
+📋 Perintah Admin:
+/cekuseraktif - Lihat semua user aktif
+/cekuser userid - Cek info user
+/aktifkanuser userid - Aktifkan 30 hari
+/putuskanuser userid - Nonaktifkan user
+/addsaldo userid jumlah - Tambah saldo
+`,
+  {
+    ...Markup.keyboard([
+      ["🏠 Menu Utama"],
+    ]).resize(),
+  });
 });
 
 // =========================
 // PROFILE
 // =========================
 
-bot.hears("👤 Profile",
-async (ctx) => {
-
-  const user =
-    await User.findOne({
-      telegramId:
-      String(ctx.from.id),
-    });
-
+bot.hears("👤 Profile", async (ctx) => {
+  const user = await User.findOne({ telegramId: String(ctx.from.id) });
   ctx.reply(`
 👤 USER PROFILE
 
@@ -373,34 +242,18 @@ async (ctx) => {
 💎 Status : ${user.status}
 💰 Saldo : Rp${user.balance}
 `);
-
 });
 
 // =========================
 // STATUS
 // =========================
 
-bot.hears("💎 Status",
-async (ctx) => {
-
-  const user =
-    await User.findOne({
-      telegramId:
-      String(ctx.from.id),
-    });
-
-  let expired =
-    "Tidak aktif";
-
+bot.hears("💎 Status", async (ctx) => {
+  const user = await User.findOne({ telegramId: String(ctx.from.id) });
+  let expired = "Tidak aktif";
   if (user.premiumExpired) {
-
-    expired =
-      new Date(
-        user.premiumExpired
-      ).toLocaleString("id-ID");
-
+    expired = new Date(user.premiumExpired).toLocaleString("id-ID");
   }
-
   ctx.reply(`
 💎 STATUS MEMBERSHIP
 
@@ -408,16 +261,13 @@ async (ctx) => {
 💎 Status : ${user.status}
 ⏳ Expired : ${expired}
 `);
-
 });
 
 // =========================
 // DEPOSIT
 // =========================
 
-bot.hears("💰 Deposit",
-async (ctx) => {
-
+bot.hears("💰 Deposit", async (ctx) => {
   ctx.reply(`
 💰 DEPOSIT SALDO
 
@@ -427,117 +277,78 @@ async (ctx) => {
 
 Minimal deposit Rp30.000
 `);
-
 });
 
 // =========================
 // BUY PREMIUM
 // =========================
 
-bot.hears("🛒 Buy Premium",
-async (ctx) => {
-
+bot.hears("🛒 Buy Premium", async (ctx) => {
   const PRICE = 30000;
-
-  const user =
-    await User.findOne({
-      telegramId:
-      String(ctx.from.id),
-    });
-
+  const user = await User.findOne({ telegramId: String(ctx.from.id) });
   if (user.balance < PRICE) {
-
     return ctx.reply(`
 ❌ Saldo tidak cukup
 
 Harga premium:
 Rp30.000 / 30 Hari
 `);
-
   }
-
   user.balance -= PRICE;
-
   user.status = "ACTIVE";
-
-  const expired =
-    new Date();
-
-  expired.setDate(
-    expired.getDate() + 30
-  );
-
-  user.premiumExpired =
-    expired;
-
+  const expired = new Date();
+  expired.setDate(expired.getDate() + 30);
+  user.premiumExpired = expired;
   await user.save();
-
   ctx.reply(`
 ✅ Premium berhasil aktif
 
 💎 Durasi : 30 Hari
 💰 Sisa saldo : Rp${user.balance}
 `);
-
 });
 
 // =========================
 // ADMIN - /cekuseraktif
 // =========================
 
-bot.command("cekuseraktif",
-async (ctx) => {
-
-  if (!isAdmin(ctx)) {
-    return ctx.reply("\u274c Khusus owner");
-  }
+bot.command("cekuseraktif", async (ctx) => {
+  if (!isAdmin(ctx)) return ctx.reply("❌ Khusus owner");
 
   const users = await User.find({ status: "ACTIVE" });
 
   if (users.length === 0) {
-    return ctx.reply("\U0001f4ed Tidak ada user aktif saat ini.");
+    return ctx.reply("📭 Tidak ada user aktif saat ini.");
   }
 
-  let msg = "\U0001f465 DAFTAR USER AKTIF\n\n";
-
+  let msg = "👥 DAFTAR USER AKTIF\n\n";
   users.forEach((u, i) => {
     const exp = u.premiumExpired
       ? new Date(u.premiumExpired).toLocaleString("id-ID")
       : "-";
     msg += `${i + 1}. @${u.username || "no_username"}\n`;
-    msg += `   \U0001f194 ID: ${u.telegramId}\n`;
-    msg += `   \u23f3 Expired: ${exp}\n\n`;
+    msg += `   🆔 ID: ${u.telegramId}\n`;
+    msg += `   ⏳ Expired: ${exp}\n\n`;
   });
-
   msg += `Total: ${users.length} user aktif`;
 
   ctx.reply(msg);
-
 });
 
 // =========================
 // ADMIN - /cekuser userid
 // =========================
 
-bot.command("cekuser",
-async (ctx) => {
-
-  if (!isAdmin(ctx)) {
-    return ctx.reply("\u274c Khusus owner");
-  }
+bot.command("cekuser", async (ctx) => {
+  if (!isAdmin(ctx)) return ctx.reply("❌ Khusus owner");
 
   const args = ctx.message.text.split(" ");
   const userId = args[1];
 
-  if (!userId) {
-    return ctx.reply(`Format: /cekuser userid`);
-  }
+  if (!userId) return ctx.reply("Format: /cekuser userid");
 
   const user = await User.findOne({ telegramId: String(userId) });
-
-  if (!user) {
-    return ctx.reply("\u274c User tidak ditemukan");
-  }
+  if (!user) return ctx.reply("❌ User tidak ditemukan");
 
   let expired = "Tidak aktif";
   if (user.premiumExpired) {
@@ -545,42 +356,32 @@ async (ctx) => {
   }
 
   ctx.reply(`
-\U0001f464 INFO USER
+👤 INFO USER
 
-\U0001f194 ID : ${user.telegramId}
-\U0001f4db Username : @${user.username || "Tidak ada"}
-\U0001f48e Status : ${user.status}
-\u23f3 Expired : ${expired}
-\U0001f4b0 Saldo : Rp${user.balance}
-\U0001f504 Total Convert : ${user.totalConvert}
-\U0001f6ab Banned : ${user.banned ? "Ya" : "Tidak"}
+🆔 ID : ${user.telegramId}
+📛 Username : @${user.username || "Tidak ada"}
+💎 Status : ${user.status}
+⏳ Expired : ${expired}
+💰 Saldo : Rp${user.balance}
+🔄 Total Convert : ${user.totalConvert}
+🚫 Banned : ${user.banned ? "Ya" : "Tidak"}
 `);
-
 });
 
 // =========================
 // ADMIN - /aktifkanuser userid
 // =========================
 
-bot.command("aktifkanuser",
-async (ctx) => {
-
-  if (!isAdmin(ctx)) {
-    return ctx.reply("\u274c Khusus owner");
-  }
+bot.command("aktifkanuser", async (ctx) => {
+  if (!isAdmin(ctx)) return ctx.reply("❌ Khusus owner");
 
   const args = ctx.message.text.split(" ");
   const userId = args[1];
 
-  if (!userId) {
-    return ctx.reply(`Format: /aktifkanuser userid`);
-  }
+  if (!userId) return ctx.reply("Format: /aktifkanuser userid");
 
   const user = await User.findOne({ telegramId: String(userId) });
-
-  if (!user) {
-    return ctx.reply("\u274c User tidak ditemukan");
-  }
+  if (!user) return ctx.reply("❌ User tidak ditemukan");
 
   const expired = new Date();
   expired.setDate(expired.getDate() + 30);
@@ -591,46 +392,36 @@ async (ctx) => {
 
   try {
     await bot.telegram.sendMessage(userId, `
-\u2705 Premium kamu telah diaktifkan oleh admin!
+✅ Premium kamu telah diaktifkan oleh admin!
 
-\U0001f48e Durasi : 30 Hari
-\u23f3 Expired : ${expired.toLocaleString("id-ID")}
+💎 Durasi : 30 Hari
+⏳ Expired : ${expired.toLocaleString("id-ID")}
 `);
   } catch (e) { console.log(e); }
 
   ctx.reply(`
-\u2705 User berhasil diaktifkan
+✅ User berhasil diaktifkan
 
-\U0001f194 User : ${userId}
-\U0001f48e Status : ACTIVE
-\u23f3 Expired : ${expired.toLocaleString("id-ID")}
+🆔 User : ${userId}
+💎 Status : ACTIVE
+⏳ Expired : ${expired.toLocaleString("id-ID")}
 `);
-
 });
 
 // =========================
 // ADMIN - /putuskanuser userid
 // =========================
 
-bot.command("putuskanuser",
-async (ctx) => {
-
-  if (!isAdmin(ctx)) {
-    return ctx.reply("\u274c Khusus owner");
-  }
+bot.command("putuskanuser", async (ctx) => {
+  if (!isAdmin(ctx)) return ctx.reply("❌ Khusus owner");
 
   const args = ctx.message.text.split(" ");
   const userId = args[1];
 
-  if (!userId) {
-    return ctx.reply(`Format: /putuskanuser userid`);
-  }
+  if (!userId) return ctx.reply("Format: /putuskanuser userid");
 
   const user = await User.findOne({ telegramId: String(userId) });
-
-  if (!user) {
-    return ctx.reply("\u274c User tidak ditemukan");
-  }
+  if (!user) return ctx.reply("❌ User tidak ditemukan");
 
   user.status = "INACTIVE";
   user.premiumExpired = null;
@@ -638,74 +429,35 @@ async (ctx) => {
 
   try {
     await bot.telegram.sendMessage(userId, `
-\u274c Premium kamu telah dinonaktifkan oleh admin.
+❌ Premium kamu telah dinonaktifkan oleh admin.
 `);
   } catch (e) { console.log(e); }
 
   ctx.reply(`
-\u2705 User berhasil dinonaktifkan
+✅ User berhasil dinonaktifkan
 
-\U0001f194 User : ${userId}
-\U0001f48e Status : INACTIVE
+🆔 User : ${userId}
+💎 Status : INACTIVE
 `);
-
 });
 
 // =========================
 // OWNER ADD SALDO
 // =========================
 
-bot.command("addsaldo",
-async (ctx) => {
+bot.command("addsaldo", async (ctx) => {
+  if (!isAdmin(ctx)) return ctx.reply("❌ Khusus owner");
 
-  const OWNER =
-    "6551372143";
+  const args = ctx.message.text.split(" ");
+  const userId = args[1];
+  const amount = Number(args[2]);
 
-  if (
-    String(ctx.from.id)
-    !== OWNER
-  ) {
+  if (!userId || !amount) return ctx.reply("Format: /addsaldo userid jumlah");
 
-    return ctx.reply(
-      "❌ Khusus owner"
-    );
-
-  }
-
-  const args =
-    ctx.message.text.split(" ");
-
-  const userId =
-    args[1];
-
-  const amount =
-    Number(args[2]);
-
-  if (!userId || !amount) {
-
-    return ctx.reply(`
-Format:
-/addsaldo userid jumlah
-`);
-
-  }
-
-  const user =
-    await User.findOne({
-      telegramId:
-      String(userId),
-    });
-
-  if (!user) {
-
-    return ctx.reply(
-      "❌ User tidak ditemukan"
-    );
-
-  }
+  const user = await User.findOne({ telegramId: String(userId) });
+  if (!user) return ctx.reply("❌ User tidak ditemukan");
 
   user.balance += amount;
-
   await user.save();
 
   ctx.reply(`
@@ -714,65 +466,27 @@ Format:
 👤 User : ${userId}
 💰 Saldo : Rp${user.balance}
 `);
-
 });
 
 // =========================
-// OWNER PREMIUM
+// OWNER PREMIUM (lama)
 // =========================
 
-bot.command("premium",
-async (ctx) => {
+bot.command("premium", async (ctx) => {
+  if (!isAdmin(ctx)) return ctx.reply("❌ Khusus owner");
 
-  const OWNER =
-    "6551372143";
+  const args = ctx.message.text.split(" ");
+  const userId = args[1];
 
-  if (
-    String(ctx.from.id)
-    !== OWNER
-  ) {
+  if (!userId) return ctx.reply("Format: /premium userid");
 
-    return ctx.reply(
-      "❌ Khusus owner"
-    );
+  const expired = new Date();
+  expired.setDate(expired.getDate() + 30);
 
-  }
-
-  const args =
-    ctx.message.text.split(" ");
-
-  const userId =
-    args[1];
-
-  if (!userId) {
-
-    return ctx.reply(`
-Format:
-/premium userid
-`);
-
-  }
-
-  const expired =
-    new Date();
-
-  expired.setDate(
-    expired.getDate() + 30
+  await User.findOneAndUpdate(
+    { telegramId: String(userId) },
+    { status: "ACTIVE", premiumExpired: expired }
   );
-
-  await User.findOneAndUpdate({
-
-    telegramId:
-    String(userId),
-
-  }, {
-
-    status: "ACTIVE",
-
-    premiumExpired:
-    expired,
-
-  });
 
   ctx.reply(`
 ✅ Premium aktif
@@ -780,226 +494,100 @@ Format:
 👤 User : ${userId}
 ⏳ 30 Hari
 `);
-
 });
 
 // =========================
 // TXT -> VCF
 // =========================
 
-bot.hears("📄 TXT → VCF",
-async (ctx) => {
-
+bot.hears("📄 TXT → VCF", async (ctx) => {
   if (isProcessing(ctx.from.id)) {
-
-    return ctx.reply(`
-⏳ Masih ada proses berjalan
-
-Tunggu sampai selesai.
-`);
-
+    return ctx.reply(`⏳ Masih ada proses berjalan\n\nTunggu sampai selesai.`);
   }
-
   startProcess(ctx.from.id);
-
   if (!(await checkPremium(ctx))) {
-
     endProcess(ctx.from.id);
-
-    return ctx.reply(
-      "❌ Premium only"
-    );
-
+    return ctx.reply("❌ Premium only");
   }
-
-  userSessions[ctx.from.id] = {
-
-    step: "TXT_UPLOAD",
-
-  };
-
-  ctx.reply(`
-📄 Upload file TXT
-`);
-
+  userSessions[ctx.from.id] = { step: "TXT_UPLOAD" };
+  ctx.reply(`📄 Upload file TXT`);
 });
 
 // =========================
 // VCF -> TXT
 // =========================
 
-bot.hears("♻️ VCF → TXT",
-async (ctx) => {
-
+bot.hears("♻️ VCF → TXT", async (ctx) => {
   if (isProcessing(ctx.from.id)) {
-
-  return ctx.reply(`
-⏳ Masih ada proses berjalan
-
-Tunggu sampai selesai.
-`);
-
-}
-
-startProcess(ctx.from.id);
-
-  if (!(await checkPremium(ctx))) {
-
-    return ctx.reply(
-      "❌ Premium only"
-    );
-
+    return ctx.reply(`⏳ Masih ada proses berjalan\n\nTunggu sampai selesai.`);
   }
-
-  userSessions[ctx.from.id] = {
-
-    step: "VCF_UPLOAD",
-
-  };
-
-  ctx.reply(`
-♻️ Upload file VCF
-`);
-
+  startProcess(ctx.from.id);
+  if (!(await checkPremium(ctx))) {
+    endProcess(ctx.from.id);
+    return ctx.reply("❌ Premium only");
+  }
+  userSessions[ctx.from.id] = { step: "VCF_UPLOAD" };
+  ctx.reply(`♻️ Upload file VCF`);
 });
 
 // =========================
 // MSG -> VCF
 // =========================
 
-bot.hears("💬 MSG → VCF",
-async (ctx) => {
-
+bot.hears("💬 MSG → VCF", async (ctx) => {
   if (!(await checkPremium(ctx))) {
-
-    return ctx.reply(
-      "❌ Premium only"
-    );
-
+    return ctx.reply("❌ Premium only");
   }
-
-  userSessions[ctx.from.id] = {
-
-    step: "MSG_FILENAME",
-
-  };
-
-  ctx.reply(`
-📁 Masukkan nama file
-`);
-
+  userSessions[ctx.from.id] = { step: "MSG_FILENAME" };
+  ctx.reply(`📁 Masukkan nama file`);
 });
-
 
 // =========================
 // DOCUMENT
 // =========================
 
 bot.on("document", async (ctx) => {
-
   try {
-
-    const session =
-      userSessions[ctx.from.id];
-
+    const session = userSessions[ctx.from.id];
     if (!session) return;
 
-    const fileId =
-      ctx.message.document.file_id;
-
-    // =========================
-    // TXT -> VCF
-    // =========================
+    const fileId = ctx.message.document.file_id;
 
     if (session.step === "TXT_UPLOAD") {
-
       session.fileId = fileId;
-
       session.step = "TXT_FILENAME";
-
-      return ctx.reply(`
-📁 Masukkan nama file
-`);
-
+      return ctx.reply(`📁 Masukkan nama file`);
     }
 
-    // =========================
-    // VCF -> TXT
-    // =========================
-
     if (session.step === "VCF_UPLOAD") {
-
-      const content =
-        await getFileContent(fileId);
-
-      const regex =
-        /TEL[^:]*:(.+)/g;
-
+      const content = await getFileContent(fileId);
+      const regex = /TEL[^:]*:(.+)/g;
       let numbers = [];
       let match;
-
-      while (
-        (match = regex.exec(content)) !== null
-      ) {
-
-        numbers.push(
-          cleanNumber(match[1])
-        );
-
+      while ((match = regex.exec(content)) !== null) {
+        numbers.push(cleanNumber(match[1]));
       }
+      fs.writeFileSync("contacts.txt", numbers.join("\n"));
+      await ctx.replyWithDocument({ source: "contacts.txt" });
 
-      fs.writeFileSync(
-        "contacts.txt",
-        numbers.join("\n")
-      );
-
-      await ctx.replyWithDocument({
-        source: "contacts.txt",
-      });
-
-      const currentUser =
-        await User.findOne({
-          telegramId:
-          String(ctx.from.id),
-        });
-
+      const currentUser = await User.findOne({ telegramId: String(ctx.from.id) });
       if (currentUser) {
-
         currentUser.totalConvert += 1;
-
-        currentUser.convertHistory.push({
-          type: "VCF → TXT",
-          date: new Date(),
-        });
-
+        currentUser.convertHistory.push({ type: "VCF → TXT", date: new Date() });
         await currentUser.save();
-
       }
 
       fs.unlinkSync("contacts.txt");
-
-      delete userSessions[
-        ctx.from.id
-      ];
-
+      delete userSessions[ctx.from.id];
       endProcess(ctx.from.id);
-
-      return ctx.reply(`
-✅ VCF → TXT berhasil
-`);
-
+      return ctx.reply(`✅ VCF → TXT berhasil`);
     }
 
   } catch (err) {
-
     console.log(err);
-
     endProcess(ctx.from.id);
-
     return ctx.reply("❌ Error");
-
   }
-
 });
 
 // =========================
@@ -1007,258 +595,104 @@ bot.on("document", async (ctx) => {
 // =========================
 
 bot.on("text", async (ctx) => {
-
   try {
-
-    const session =
-      userSessions[ctx.from.id];
-
+    const session = userSessions[ctx.from.id];
     if (!session) return;
 
-    // =========================
     // TXT FILENAME
-    // =========================
-
     if (session.step === "TXT_FILENAME") {
-
-      session.output =
-        ctx.message.text;
-
-      session.step =
-        "TXT_CONTACT";
-
-      return ctx.reply(`
-📛 Masukkan nama kontak
-`);
-
+      session.output = ctx.message.text;
+      session.step = "TXT_CONTACT";
+      return ctx.reply(`📛 Masukkan nama kontak`);
     }
 
-    // =========================
     // TXT CONTACT
-    // =========================
-
     if (session.step === "TXT_CONTACT") {
-
-      session.contact =
-        ctx.message.text;
-
-      session.step =
-        "TXT_START";
-
-      return ctx.reply(`
-🔢 Masukkan nomor awal
-`);
-
+      session.contact = ctx.message.text;
+      session.step = "TXT_START";
+      return ctx.reply(`🔢 Masukkan nomor awal`);
     }
 
-    // =========================
     // TXT START
-    // =========================
-
     if (session.step === "TXT_START") {
-
-      const start =
-        parseInt(ctx.message.text);
-
-      const content =
-        await getFileContent(
-          session.fileId
-        );
-
-      const numbers =
-        content
-        .split(/\r?\n/)
-        .map(v => cleanNumber(v))
-        .filter(v => v);
+      const start = parseInt(ctx.message.text);
+      const content = await getFileContent(session.fileId);
+      const numbers = content.split(/\r?\n/).map(v => cleanNumber(v)).filter(v => v);
 
       let vcf = "";
-
       numbers.forEach((num, i) => {
-
-        vcf +=
-`BEGIN:VCARD
-VERSION:3.0
-FN:${session.contact} ${start + i}
-TEL;TYPE=CELL:${num}
-END:VCARD
-`;
-
+        vcf += `BEGIN:VCARD\nVERSION:3.0\nFN:${session.contact} ${start + i}\nTEL;TYPE=CELL:${num}\nEND:VCARD\n`;
       });
 
-      const finalFile =
-`${session.output}.vcf`;
+      const finalFile = `${session.output}.vcf`;
+      fs.writeFileSync(finalFile, vcf);
+      await ctx.replyWithDocument({ source: finalFile });
 
-      fs.writeFileSync(
-        finalFile,
-        vcf
-      );
-
-      await ctx.replyWithDocument({
-        source: finalFile,
-      });
-
-      const currentUser =
-        await User.findOne({
-          telegramId:
-          String(ctx.from.id),
-        });
-
+      const currentUser = await User.findOne({ telegramId: String(ctx.from.id) });
       if (currentUser) {
-
         currentUser.totalConvert += 1;
-
-        currentUser.convertHistory.push({
-          type: "TXT → VCF",
-          date: new Date(),
-        });
-
+        currentUser.convertHistory.push({ type: "TXT → VCF", date: new Date() });
         await currentUser.save();
-
       }
 
       fs.unlinkSync(finalFile);
-
-      delete userSessions[
-        ctx.from.id
-      ];
-
+      delete userSessions[ctx.from.id];
       endProcess(ctx.from.id);
-
-      return ctx.reply(`
-✅ TXT → VCF berhasil
-`);
-
+      return ctx.reply(`✅ TXT → VCF berhasil`);
     }
 
-    // =========================
-    // MSG -> VCF
-    // =========================
-
+    // MSG FILENAME
     if (session.step === "MSG_FILENAME") {
-
-      session.output =
-        ctx.message.text;
-
-      session.step =
-        "MSG_CONTACT";
-
-      return ctx.reply(`
-📛 Masukkan nama kontak
-`);
-
+      session.output = ctx.message.text;
+      session.step = "MSG_CONTACT";
+      return ctx.reply(`📛 Masukkan nama kontak`);
     }
 
+    // MSG CONTACT
     if (session.step === "MSG_CONTACT") {
-
-      session.contact =
-        ctx.message.text;
-
-      session.step =
-        "MSG_START";
-
-      return ctx.reply(`
-🔢 Masukkan nomor awal
-`);
-
+      session.contact = ctx.message.text;
+      session.step = "MSG_START";
+      return ctx.reply(`🔢 Masukkan nomor awal`);
     }
 
+    // MSG START
     if (session.step === "MSG_START") {
-
-      session.start =
-        parseInt(ctx.message.text);
-
-      session.step =
-        "MSG_NUMBERS";
-
-      return ctx.reply(`
-💬 Kirim nomor
-
-Contoh:
-08123
-08124
-08125
-`);
-
+      session.start = parseInt(ctx.message.text);
+      session.step = "MSG_NUMBERS";
+      return ctx.reply(`💬 Kirim nomor\n\nContoh:\n08123\n08124\n08125`);
     }
 
+    // MSG NUMBERS
     if (session.step === "MSG_NUMBERS") {
-
-      const numbers =
-        ctx.message.text
-        .split(/\r?\n/)
-        .map(v => cleanNumber(v))
-        .filter(v => v);
+      const numbers = ctx.message.text.split(/\r?\n/).map(v => cleanNumber(v)).filter(v => v);
 
       let vcf = "";
-
       numbers.forEach((num, i) => {
-
-        vcf +=
-`BEGIN:VCARD
-VERSION:3.0
-FN:${session.contact} ${session.start + i}
-TEL;TYPE=CELL:${num}
-END:VCARD
-`;
-
+        vcf += `BEGIN:VCARD\nVERSION:3.0\nFN:${session.contact} ${session.start + i}\nTEL;TYPE=CELL:${num}\nEND:VCARD\n`;
       });
 
-      const finalFile =
-`${session.output}.vcf`;
+      const finalFile = `${session.output}.vcf`;
+      fs.writeFileSync(finalFile, vcf);
+      await ctx.replyWithDocument({ source: finalFile });
 
-      fs.writeFileSync(
-        finalFile,
-        vcf
-      );
-
-      await ctx.replyWithDocument({
-        source: finalFile,
-      });
-
-      const currentUser =
-        await User.findOne({
-          telegramId:
-          String(ctx.from.id),
-        });
-
+      const currentUser = await User.findOne({ telegramId: String(ctx.from.id) });
       if (currentUser) {
-
         currentUser.totalConvert += 1;
-
-        currentUser.convertHistory.push({
-          type: "MSG → VCF",
-          date: new Date(),
-        });
-
+        currentUser.convertHistory.push({ type: "MSG → VCF", date: new Date() });
         await currentUser.save();
-
       }
 
       fs.unlinkSync(finalFile);
-
-      delete userSessions[
-        ctx.from.id
-      ];
-
+      delete userSessions[ctx.from.id];
       endProcess(ctx.from.id);
-
-      return ctx.reply(`
-✅ MSG → VCF berhasil
-`);
-
-
-
+      return ctx.reply(`✅ MSG → VCF berhasil`);
+    }
 
   } catch (err) {
-
     console.log(err);
-
     endProcess(ctx.from.id);
-
     return ctx.reply("❌ Error");
-
   }
-
 });
 
 // =========================
@@ -1266,53 +700,16 @@ END:VCARD
 // =========================
 
 bot.catch((err) => {
-
-  console.log(
-    "BOT ERROR:",
-    err
-  );
-
+  console.log("BOT ERROR:", err);
 });
 
-// =========================
-// PROCESS ERROR
-// =========================
-
-process.on(
-  "unhandledRejection",
-  (err) => {
-
-    console.log(err);
-
-  }
-);
-
-process.on(
-  "uncaughtException",
-  (err) => {
-
-    console.log(err);
-
-  }
-);
+process.on("unhandledRejection", (err) => { console.log(err); });
+process.on("uncaughtException", (err) => { console.log(err); });
 
 // =========================
 // LAUNCH
 // =========================
 
 bot.launch()
-.then(() => {
-
-  console.log(
-    "🚀 BOT SUCCESS ONLINE"
-  );
-
-})
-.catch((err) => {
-
-  console.log(
-    "❌ BOT LAUNCH ERROR:",
-    err
-  );
-
-});
+.then(() => { console.log("🚀 BOT SUCCESS ONLINE"); })
+.catch((err) => { console.log("❌ BOT LAUNCH ERROR:", err); });
