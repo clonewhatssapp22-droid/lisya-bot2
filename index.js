@@ -289,14 +289,19 @@ bot.start(async (ctx) => {
     return ctx.reply(
 `👑 Welcome Admin LISYA BOT
 
-Pilih menu di bawah ini:
+📋 Perintah Admin:
+/cekuseraktif - Lihat semua user aktif
+/cekuser userid - Cek info user
+/aktifkanuser userid - Aktifkan 30 hari
+/putuskanuser userid - Nonaktifkan user
+/addsaldo userid jumlah - Tambah saldo
+
+Contoh:
+/aktifkanuser 7835271216
+/cekuser 7835271216
 `,
 {
   ...Markup.keyboard([
-
-    ["👥 Cek User Aktif", "🔍 Cek User"],
-
-    ["✅ Aktifkan User", "❌ Putuskan User"],
 
     ["🏠 Menu Utama"],
 
@@ -477,30 +482,31 @@ Rp30.000 / 30 Hari
 });
 
 // =========================
-// ADMIN KEYBOARD - CEK USER AKTIF (SEMUA)
+// ADMIN - /cekuseraktif
 // =========================
 
-bot.hears("👥 Cek User Aktif",
+bot.command("cekuseraktif",
 async (ctx) => {
 
   if (!isAdmin(ctx)) {
-    return ctx.reply("❌ Khusus owner");
+    return ctx.reply("\u274c Khusus owner");
   }
 
   const users = await User.find({ status: "ACTIVE" });
 
   if (users.length === 0) {
-    return ctx.reply("📭 Tidak ada user aktif saat ini.");
+    return ctx.reply("\U0001f4ed Tidak ada user aktif saat ini.");
   }
 
-  let msg = "👥 DAFTAR USER AKTIF\n\n";
+  let msg = "\U0001f465 DAFTAR USER AKTIF\n\n";
 
   users.forEach((u, i) => {
     const exp = u.premiumExpired
       ? new Date(u.premiumExpired).toLocaleString("id-ID")
       : "-";
-    msg += `${i + 1}. @${u.username || "no_username"} | ID: ${u.telegramId}\n`;
-    msg += `   ⏳ Expired: ${exp}\n\n`;
+    msg += `${i + 1}. @${u.username || "no_username"}\n`;
+    msg += `   \U0001f194 ID: ${u.telegramId}\n`;
+    msg += `   \u23f3 Expired: ${exp}\n\n`;
   });
 
   msg += `Total: ${users.length} user aktif`;
@@ -510,124 +516,138 @@ async (ctx) => {
 });
 
 // =========================
-// ADMIN KEYBOARD - CEK USER INDIVIDU
+// ADMIN - /cekuser userid
 // =========================
 
-bot.hears("🔍 Cek User",
+bot.command("cekuser",
 async (ctx) => {
 
   if (!isAdmin(ctx)) {
-    return ctx.reply("❌ Khusus owner");
+    return ctx.reply("\u274c Khusus owner");
   }
 
-  delete userSessions[ctx.from.id];
-  userSessions[ctx.from.id] = {
-    step: "ADMIN_CEKUSER",
-  };
+  const args = ctx.message.text.split(" ");
+  const userId = args[1];
 
-  ctx.reply("🆔 Masukkan ID user yang ingin dicek:");
+  if (!userId) {
+    return ctx.reply(`Format: /cekuser userid`);
+  }
+
+  const user = await User.findOne({ telegramId: String(userId) });
+
+  if (!user) {
+    return ctx.reply("\u274c User tidak ditemukan");
+  }
+
+  let expired = "Tidak aktif";
+  if (user.premiumExpired) {
+    expired = new Date(user.premiumExpired).toLocaleString("id-ID");
+  }
+
+  ctx.reply(`
+\U0001f464 INFO USER
+
+\U0001f194 ID : ${user.telegramId}
+\U0001f4db Username : @${user.username || "Tidak ada"}
+\U0001f48e Status : ${user.status}
+\u23f3 Expired : ${expired}
+\U0001f4b0 Saldo : Rp${user.balance}
+\U0001f504 Total Convert : ${user.totalConvert}
+\U0001f6ab Banned : ${user.banned ? "Ya" : "Tidak"}
+`);
 
 });
 
 // =========================
-// ADMIN KEYBOARD - AKTIFKAN USER
+// ADMIN - /aktifkanuser userid
 // =========================
 
-bot.hears("✅ Aktifkan User",
+bot.command("aktifkanuser",
 async (ctx) => {
 
   if (!isAdmin(ctx)) {
-    return ctx.reply("❌ Khusus owner");
+    return ctx.reply("\u274c Khusus owner");
   }
 
-  delete userSessions[ctx.from.id];
-  userSessions[ctx.from.id] = {
-    step: "ADMIN_AKTIFKAN",
-  };
+  const args = ctx.message.text.split(" ");
+  const userId = args[1];
 
-  ctx.reply("🆔 Masukkan ID user yang ingin diaktifkan (30 hari):");
+  if (!userId) {
+    return ctx.reply(`Format: /aktifkanuser userid`);
+  }
+
+  const user = await User.findOne({ telegramId: String(userId) });
+
+  if (!user) {
+    return ctx.reply("\u274c User tidak ditemukan");
+  }
+
+  const expired = new Date();
+  expired.setDate(expired.getDate() + 30);
+
+  user.status = "ACTIVE";
+  user.premiumExpired = expired;
+  await user.save();
+
+  try {
+    await bot.telegram.sendMessage(userId, `
+\u2705 Premium kamu telah diaktifkan oleh admin!
+
+\U0001f48e Durasi : 30 Hari
+\u23f3 Expired : ${expired.toLocaleString("id-ID")}
+`);
+  } catch (e) { console.log(e); }
+
+  ctx.reply(`
+\u2705 User berhasil diaktifkan
+
+\U0001f194 User : ${userId}
+\U0001f48e Status : ACTIVE
+\u23f3 Expired : ${expired.toLocaleString("id-ID")}
+`);
 
 });
 
 // =========================
-// ADMIN KEYBOARD - PUTUSKAN USER
+// ADMIN - /putuskanuser userid
 // =========================
 
-bot.hears("❌ Putuskan User",
+bot.command("putuskanuser",
 async (ctx) => {
 
   if (!isAdmin(ctx)) {
-    return ctx.reply("❌ Khusus owner");
+    return ctx.reply("\u274c Khusus owner");
   }
 
-  delete userSessions[ctx.from.id];
-  userSessions[ctx.from.id] = {
-    step: "ADMIN_PUTUSKAN",
-  };
+  const args = ctx.message.text.split(" ");
+  const userId = args[1];
 
-  ctx.reply("🆔 Masukkan ID user yang ingin dinonaktifkan:");
+  if (!userId) {
+    return ctx.reply(`Format: /putuskanuser userid`);
+  }
 
-});
+  const user = await User.findOne({ telegramId: String(userId) });
 
-// =========================
-// ADMIN KEYBOARD - MENU UTAMA
-// =========================
+  if (!user) {
+    return ctx.reply("\u274c User tidak ditemukan");
+  }
 
-bot.hears("🏠 Menu Utama",
-async (ctx) => {
+  user.status = "INACTIVE";
+  user.premiumExpired = null;
+  await user.save();
 
-  if (!isAdmin(ctx)) return;
+  try {
+    await bot.telegram.sendMessage(userId, `
+\u274c Premium kamu telah dinonaktifkan oleh admin.
+`);
+  } catch (e) { console.log(e); }
 
-  ctx.reply(
-`💎 Welcome to LISYA BOT`,
-{
-  ...Markup.keyboard([
+  ctx.reply(`
+\u2705 User berhasil dinonaktifkan
 
-    ["📄 TXT → VCF", "♻️ VCF → TXT"],
-
-    ["📊 XLS → TXT", "📁 CSV → TXT"],
-
-    ["💬 MSG → VCF"],
-
-    ["📎 Gabung TXT", "📇 Gabung VCF"],
-
-    ["✂️ Bagi TXT", "🧩 Bagi VCF"],
-
-    ["👤 Profile", "💎 Status"],
-
-    ["💰 Deposit", "🛒 Buy Premium"],
-
-    ["👑 Menu Admin"],
-
-  ]).resize(),
-}
-);
-
-});
-
-// =========================
-// ADMIN KEYBOARD - KEMBALI KE ADMIN
-// =========================
-
-bot.hears("👑 Menu Admin",
-async (ctx) => {
-
-  if (!isAdmin(ctx)) return;
-
-  ctx.reply(
-`👑 Menu Admin`,
-{
-  ...Markup.keyboard([
-
-    ["👥 Cek User Aktif", "🔍 Cek User"],
-
-    ["✅ Aktifkan User", "❌ Putuskan User"],
-
-    ["🏠 Menu Utama"],
-
-  ]).resize(),
-}
-);
+\U0001f194 User : ${userId}
+\U0001f48e Status : INACTIVE
+`);
 
 });
 
@@ -1227,132 +1247,7 @@ END:VCARD
 `);
 
 
-    // =========================
-    // ADMIN SESSION - CEK USER
-    // =========================
 
-    if (session.step === "ADMIN_CEKUSER") {
-
-      const userId = ctx.message.text.trim();
-
-      if (!/^\d+$/.test(userId)) {
-        return ctx.reply("❌ ID tidak valid. Masukkan ID angka saja. Contoh: 6551372143");
-      }
-
-      const user = await User.findOne({ telegramId: String(userId) });
-
-      delete userSessions[ctx.from.id];
-
-      if (!user) {
-        return ctx.reply("❌ User tidak ditemukan");
-      }
-
-      let expired = "Tidak aktif";
-      if (user.premiumExpired) {
-        expired = new Date(user.premiumExpired).toLocaleString("id-ID");
-      }
-
-      return ctx.reply(`
-👤 INFO USER
-
-🆔 ID : ${user.telegramId}
-📛 Username : @${user.username || "Tidak ada"}
-💎 Status : ${user.status}
-⏳ Expired : ${expired}
-💰 Saldo : Rp${user.balance}
-🔄 Total Convert : ${user.totalConvert}
-🚫 Banned : ${user.banned ? "Ya" : "Tidak"}
-`);
-
-    }
-
-    // =========================
-    // ADMIN SESSION - AKTIFKAN USER
-    // =========================
-
-    if (session.step === "ADMIN_AKTIFKAN") {
-
-      const userId = ctx.message.text.trim();
-
-      // Validasi: harus angka
-      if (!/^\d+$/.test(userId)) {
-        return ctx.reply("❌ ID tidak valid. Masukkan ID angka saja. Contoh: 6551372143");
-      }
-
-      const user = await User.findOne({ telegramId: String(userId) });
-
-      delete userSessions[ctx.from.id];
-
-      if (!user) {
-        return ctx.reply("❌ User tidak ditemukan");
-      }
-
-      const expired = new Date();
-      expired.setDate(expired.getDate() + 30);
-
-      user.status = "ACTIVE";
-      user.premiumExpired = expired;
-      await user.save();
-
-      try {
-        await bot.telegram.sendMessage(userId, `
-✅ Premium kamu telah diaktifkan oleh admin!
-
-💎 Durasi : 30 Hari
-⏳ Expired : ${expired.toLocaleString("id-ID")}
-`);
-      } catch (e) { console.log(e); }
-
-      return ctx.reply(`
-✅ User berhasil diaktifkan
-
-🆔 User : ${userId}
-💎 Status : ACTIVE
-⏳ Expired : ${expired.toLocaleString("id-ID")}
-`);
-
-    }
-
-    // =========================
-    // ADMIN SESSION - PUTUSKAN USER
-    // =========================
-
-    if (session.step === "ADMIN_PUTUSKAN") {
-
-      const userId = ctx.message.text.trim();
-
-      if (!/^\d+$/.test(userId)) {
-        return ctx.reply("❌ ID tidak valid. Masukkan ID angka saja. Contoh: 6551372143");
-      }
-
-      const user = await User.findOne({ telegramId: String(userId) });
-
-      delete userSessions[ctx.from.id];
-
-      if (!user) {
-        return ctx.reply("❌ User tidak ditemukan");
-      }
-
-      user.status = "INACTIVE";
-      user.premiumExpired = null;
-      await user.save();
-
-      try {
-        await bot.telegram.sendMessage(userId, `
-❌ Premium kamu telah dinonaktifkan oleh admin.
-`);
-      } catch (e) { console.log(e); }
-
-      return ctx.reply(`
-✅ User berhasil dinonaktifkan
-
-🆔 User : ${userId}
-💎 Status : INACTIVE
-`);
-
-    }
-
-    }
 
   } catch (err) {
 
