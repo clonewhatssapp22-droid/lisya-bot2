@@ -1,9 +1,7 @@
 require("dotenv").config();
 
 const fs = require("fs");
-const path = require("path");
 const axios = require("axios");
-const XLSX = require("xlsx");
 const mongoose = require("mongoose");
 const { Telegraf, Markup } = require("telegraf");
 
@@ -49,6 +47,42 @@ const activeProcesses = new Set();
 const userSessions = {};
 
 // =========================
+// GRUP WAJIB
+// =========================
+
+const REQUIRED_CHANNELS = [
+  { id: "@bussinesworkallcountries", name: "Business Work All Countries", url: "https://t.me/bussinesworkallcountries" },
+  { id: "@lisyastorejaseb",          name: "Lisya Store Jasa B",          url: "https://t.me/lisyastorejaseb" },
+  { id: "@freelancejobindonesian",   name: "Freelance Job Indonesian",    url: "https://t.me/freelancejobindonesian" },
+  { id: "@Lokermedaninfoo",          name: "Loker Medan Info",            url: "https://t.me/Lokermedaninfoo" },
+];
+
+async function checkJoinChannels(userId) {
+  const notJoined = [];
+  for (const ch of REQUIRED_CHANNELS) {
+    try {
+      const member = await bot.telegram.getChatMember(ch.id, userId);
+      if (["left", "kicked"].includes(member.status)) {
+        notJoined.push(ch);
+      }
+    } catch (e) {
+      // Kalau bot bukan admin grup, anggap sudah join
+      console.log(`Cannot check ${ch.id}:`, e.message);
+    }
+  }
+  return notJoined;
+}
+
+function joinMessage(notJoined) {
+  let msg = "⚠️ Kamu belum join grup/channel wajib!\n\nSilakan join dulu:\n\n";
+  notJoined.forEach((ch, i) => {
+    msg += `${i + 1}. <a href="${ch.url}">${ch.name}</a>\n`;
+  });
+  msg += "\nSetelah join, klik /start lagi.";
+  return msg;
+}
+
+// =========================
 // HELPER
 // =========================
 
@@ -87,7 +121,7 @@ function startProcess(userId) { activeProcesses.add(userId); }
 function endProcess(userId) { activeProcesses.delete(userId); }
 
 // =========================
-// EXPIRED PREMIUM CHECKER
+// EXPIRED CHECKER
 // =========================
 
 async function checkExpiredUsers() {
@@ -98,24 +132,39 @@ async function checkExpiredUsers() {
     user.premiumExpired = null;
     await user.save();
     try {
-      await bot.telegram.sendMessage(user.telegramId, `❌ Premium kamu telah expired\n\nSilakan renew membership.`);
+      await bot.telegram.sendMessage(user.telegramId, "❌ Premium kamu telah expired\n\nSilakan renew membership.");
     } catch (err) { console.log(err); }
   }
 }
 
+setInterval(checkExpiredUsers, 1000 * 60 * 60);
+
 // =========================
-// KEYBOARD ADMIN
+// KEYBOARD
 // =========================
 
 function adminKeyboard() {
   return Markup.keyboard([
     ["👥 Cek User Aktif"],
     ["✅ Aktifkan User", "❌ Putuskan User"],
-    ["🔍 Cek User", "🏠 Menu Utama"],
+    ["🔍 Cek User", "📢 Broadcast"],
+    ["🏠 Menu Utama"],
   ]).resize();
 }
 
 function mainKeyboard() {
+  return Markup.keyboard([
+    ["📄 TXT → VCF", "♻️ VCF → TXT"],
+    ["📊 XLS → TXT", "📁 CSV → TXT"],
+    ["💬 MSG → VCF"],
+    ["📎 Gabung TXT", "📇 Gabung VCF"],
+    ["✂️ Bagi TXT", "🧩 Bagi VCF"],
+    ["👤 Profile", "💎 Status"],
+    ["💰 Deposit", "🛒 Buy Premium"],
+  ]).resize();
+}
+
+function adminMainKeyboard() {
   return Markup.keyboard([
     ["📄 TXT → VCF", "♻️ VCF → TXT"],
     ["📊 XLS → TXT", "📁 CSV → TXT"],
@@ -133,26 +182,78 @@ function mainKeyboard() {
 // =========================
 
 bot.start(async (ctx) => {
+
+  // Buat atau update user
   let user = await User.findOne({ telegramId: String(ctx.from.id) });
   if (!user) {
     user = await User.create({
       telegramId: String(ctx.from.id),
       username: ctx.from.username || "no_username",
     });
+  } else {
+    user.username = ctx.from.username || user.username;
+    await user.save();
   }
-  if (user?.banned) {
-    return ctx.reply("🚫 oui tod lu dibanned dari bot");
+
+  if (user.banned) {
+    return ctx.reply("🚫 Kamu telah dibanned dari bot ini.");
   }
+
+  // Skip cek join untuk admin
+  if (!isAdmin(ctx)) {
+    const notJoined = await checkJoinChannels(ctx.from.id);
+    if (notJoined.length > 0) {
+      return ctx.reply(joinMessage(notJoined), {
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback("🔄 Saya Sudah Join", "check_join")],
+        ]),
+      });
+    }
+  }
+
   if (isAdmin(ctx)) {
     return ctx.reply("👑 Welcome Admin LISYA BOT\n\nPilih menu:", adminKeyboard());
   }
-  ctx.reply(`💎 Welcome to LISYA BOT\n\nPremium Converter Tools\nFast • Secure • Premium\n\n✅ TXT → VCF\n✅ VCF → TXT\n✅ XLS → TXT\n✅ CSV → TXT\n✅ MSG → VCF\n✅ Merge & Split Files\n\n🔥 Upgrade premium untuk unlock semua fitur.\n\n📢 Jangan lupa join group official:\nhttps://t.me/+RnXaaNZLYG5lN2Vl`,
+
+  ctx.reply(
+    "💎 Welcome to LISYA BOT\n\nPremium Converter Tools\nFast • Secure • Premium\n\n✅ TXT → VCF\n✅ VCF → TXT\n✅ XLS → TXT\n✅ CSV → TXT\n✅ MSG → VCF\n✅ Merge & Split Files\n\n🔥 Upgrade premium untuk unlock semua fitur.\n\n📢 Jangan lupa join group official:\nhttps://t.me/+RnXaaNZLYG5lN2Vl",
     mainKeyboard()
   );
 });
 
 // =========================
-// ADMIN - CEK USER AKTIF (SEMUA)
+// CALLBACK - CEK JOIN
+// =========================
+
+bot.action("check_join", async (ctx) => {
+  await ctx.answerCbQuery();
+
+  const notJoined = await checkJoinChannels(ctx.from.id);
+
+  if (notJoined.length > 0) {
+    return ctx.editMessageText(joinMessage(notJoined), {
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback("🔄 Cek Lagi", "check_join")],
+      ]),
+    });
+  }
+
+  await ctx.deleteMessage();
+
+  const user = await User.findOne({ telegramId: String(ctx.from.id) });
+
+  ctx.reply(
+    "✅ Terima kasih sudah join!\n\n💎 Welcome to LISYA BOT\n\nPremium Converter Tools\nFast • Secure • Premium",
+    mainKeyboard()
+  );
+});
+
+// =========================
+// ADMIN - CEK USER AKTIF
 // =========================
 
 bot.hears("👥 Cek User Aktif", async (ctx) => {
@@ -185,20 +286,18 @@ bot.hears("👥 Cek User Aktif", async (ctx) => {
 bot.hears("✅ Aktifkan User", async (ctx) => {
   if (!isAdmin(ctx)) return ctx.reply("❌ Khusus owner");
 
-  // Ambil daftar semua user INACTIVE untuk ditampilkan
   const users = await User.find({ status: "INACTIVE", banned: false });
 
   if (users.length === 0) {
     return ctx.reply("📭 Tidak ada user inactive.", adminKeyboard());
   }
 
-  // Buat inline keyboard — tiap user jadi tombol
-  const buttons = users.map((u) =>
-    [Markup.button.callback(
+  const buttons = users.map((u) => [
+    Markup.button.callback(
       `${u.username || "no_username"} (${u.telegramId})`,
       `aktif_${u.telegramId}`
-    )]
-  );
+    ),
+  ]);
 
   ctx.reply("Pilih user yang ingin diaktifkan 30 hari:",
     Markup.inlineKeyboard(buttons)
@@ -218,12 +317,12 @@ bot.hears("❌ Putuskan User", async (ctx) => {
     return ctx.reply("📭 Tidak ada user aktif.", adminKeyboard());
   }
 
-  const buttons = users.map((u) =>
-    [Markup.button.callback(
+  const buttons = users.map((u) => [
+    Markup.button.callback(
       `${u.username || "no_username"} (${u.telegramId})`,
       `putus_${u.telegramId}`
-    )]
-  );
+    ),
+  ]);
 
   ctx.reply("Pilih user yang ingin dinonaktifkan:",
     Markup.inlineKeyboard(buttons)
@@ -231,7 +330,7 @@ bot.hears("❌ Putuskan User", async (ctx) => {
 });
 
 // =========================
-// ADMIN - CEK USER INDIVIDU
+// ADMIN - CEK USER
 // =========================
 
 bot.hears("🔍 Cek User", async (ctx) => {
@@ -243,16 +342,39 @@ bot.hears("🔍 Cek User", async (ctx) => {
     return ctx.reply("📭 Belum ada user.", adminKeyboard());
   }
 
-  const buttons = users.map((u) =>
-    [Markup.button.callback(
+  const buttons = users.map((u) => [
+    Markup.button.callback(
       `${u.status === "ACTIVE" ? "✅" : "❌"} ${u.username || "no_username"} (${u.telegramId})`,
       `cek_${u.telegramId}`
-    )]
-  );
+    ),
+  ]);
 
   ctx.reply("Pilih user yang ingin dicek:",
     Markup.inlineKeyboard(buttons)
   );
+});
+
+// =========================
+// ADMIN - BROADCAST
+// =========================
+
+bot.hears("📢 Broadcast", async (ctx) => {
+  if (!isAdmin(ctx)) return ctx.reply("❌ Khusus owner");
+
+  userSessions[ctx.from.id] = { step: "BROADCAST_WAIT" };
+
+  ctx.reply(
+    "📢 BROADCAST\n\nKirim pesan yang ingin di-broadcast:\n• Teks biasa\n• Foto + caption\n• Video + caption\n\nPesan akan dikirim ke semua user terdaftar.",
+    Markup.inlineKeyboard([
+      [Markup.button.callback("❌ Batal", "broadcast_cancel")],
+    ])
+  );
+});
+
+bot.action("broadcast_cancel", async (ctx) => {
+  delete userSessions[ctx.from.id];
+  await ctx.answerCbQuery("Dibatalkan");
+  ctx.reply("❌ Broadcast dibatalkan.", adminKeyboard());
 });
 
 // =========================
@@ -261,7 +383,7 @@ bot.hears("🔍 Cek User", async (ctx) => {
 
 bot.hears("🏠 Menu Utama", async (ctx) => {
   if (!isAdmin(ctx)) return;
-  ctx.reply("💎 Menu Utama", mainKeyboard());
+  ctx.reply("💎 Menu Utama", adminMainKeyboard());
 });
 
 bot.hears("👑 Menu Admin", async (ctx) => {
@@ -278,18 +400,18 @@ bot.action(/^aktif_(.+)$/, async (ctx) => {
 
   const userId = ctx.match[1];
   const user = await User.findOne({ telegramId: String(userId) });
-
   if (!user) return ctx.answerCbQuery("❌ User tidak ditemukan");
 
   const expired = new Date();
   expired.setDate(expired.getDate() + 30);
-
   user.status = "ACTIVE";
   user.premiumExpired = expired;
   await user.save();
 
   try {
-    await bot.telegram.sendMessage(userId, `✅ Premium kamu telah diaktifkan oleh admin!\n\n💎 Durasi : 30 Hari\n⏳ Expired : ${expired.toLocaleString("id-ID")}`);
+    await bot.telegram.sendMessage(userId,
+      `✅ Premium kamu telah diaktifkan oleh admin!\n\n💎 Durasi : 30 Hari\n⏳ Expired : ${expired.toLocaleString("id-ID")}`
+    );
   } catch (e) { console.log(e); }
 
   await ctx.editMessageText(
@@ -307,7 +429,6 @@ bot.action(/^putus_(.+)$/, async (ctx) => {
 
   const userId = ctx.match[1];
   const user = await User.findOne({ telegramId: String(userId) });
-
   if (!user) return ctx.answerCbQuery("❌ User tidak ditemukan");
 
   user.status = "INACTIVE";
@@ -315,7 +436,7 @@ bot.action(/^putus_(.+)$/, async (ctx) => {
   await user.save();
 
   try {
-    await bot.telegram.sendMessage(userId, `❌ Premium kamu telah dinonaktifkan oleh admin.`);
+    await bot.telegram.sendMessage(userId, "❌ Premium kamu telah dinonaktifkan oleh admin.");
   } catch (e) { console.log(e); }
 
   await ctx.editMessageText(
@@ -333,7 +454,6 @@ bot.action(/^cek_(.+)$/, async (ctx) => {
 
   const userId = ctx.match[1];
   const user = await User.findOne({ telegramId: String(userId) });
-
   if (!user) return ctx.answerCbQuery("❌ User tidak ditemukan");
 
   let expired = "Tidak aktif";
@@ -361,6 +481,7 @@ bot.action(/^cek_(.+)$/, async (ctx) => {
 
 bot.hears("👤 Profile", async (ctx) => {
   const user = await User.findOne({ telegramId: String(ctx.from.id) });
+  if (!user) return ctx.reply("❌ User tidak ditemukan");
   ctx.reply(`
 👤 USER PROFILE
 
@@ -377,6 +498,7 @@ bot.hears("👤 Profile", async (ctx) => {
 
 bot.hears("💎 Status", async (ctx) => {
   const user = await User.findOne({ telegramId: String(ctx.from.id) });
+  if (!user) return ctx.reply("❌ User tidak ditemukan");
   let expired = "Tidak aktif";
   if (user.premiumExpired) {
     expired = new Date(user.premiumExpired).toLocaleString("id-ID");
@@ -413,8 +535,9 @@ Minimal deposit Rp30.000
 bot.hears("🛒 Buy Premium", async (ctx) => {
   const PRICE = 30000;
   const user = await User.findOne({ telegramId: String(ctx.from.id) });
+  if (!user) return ctx.reply("❌ User tidak ditemukan");
   if (user.balance < PRICE) {
-    return ctx.reply(`❌ Saldo tidak cukup\n\nHarga premium:\nRp30.000 / 30 Hari`);
+    return ctx.reply("❌ Saldo tidak cukup\n\nHarga premium:\nRp30.000 / 30 Hari");
   }
   user.balance -= PRICE;
   user.status = "ACTIVE";
@@ -426,7 +549,7 @@ bot.hears("🛒 Buy Premium", async (ctx) => {
 });
 
 // =========================
-// SLASH COMMAND ADMIN (backup)
+// SLASH ADMIN (backup)
 // =========================
 
 bot.command("aktifkanuser", async (ctx) => {
@@ -453,7 +576,7 @@ bot.command("putuskanuser", async (ctx) => {
   user.status = "INACTIVE";
   user.premiumExpired = null;
   await user.save();
-  try { await bot.telegram.sendMessage(userId, `❌ Premium dinonaktifkan admin.`); } catch(e){}
+  try { await bot.telegram.sendMessage(userId, "❌ Premium dinonaktifkan admin."); } catch(e){}
   ctx.reply(`✅ User ${userId} dinonaktifkan`);
 });
 
@@ -580,10 +703,97 @@ bot.on("document", async (ctx) => {
       endProcess(ctx.from.id);
       return ctx.reply("✅ VCF → TXT berhasil");
     }
+
   } catch (err) {
     console.log(err);
     endProcess(ctx.from.id);
     return ctx.reply("❌ Error");
+  }
+});
+
+// =========================
+// PHOTO (broadcast & convert)
+// =========================
+
+bot.on("photo", async (ctx) => {
+  try {
+    const session = userSessions[ctx.from.id];
+    if (!session) return;
+
+    // BROADCAST FOTO
+    if (session.step === "BROADCAST_WAIT") {
+      if (!isAdmin(ctx)) return;
+
+      delete userSessions[ctx.from.id];
+
+      const photo = ctx.message.photo[ctx.message.photo.length - 1];
+      const caption = ctx.message.caption || "";
+      const allUsers = await User.find({});
+
+      let sukses = 0;
+      let gagal = 0;
+
+      const statusMsg = await ctx.reply(`📢 Broadcast dimulai...\nTotal: ${allUsers.length} user`);
+
+      for (const u of allUsers) {
+        try {
+          await bot.telegram.sendPhoto(u.telegramId, photo.file_id, { caption });
+          sukses++;
+        } catch (e) {
+          gagal++;
+        }
+        // Delay agar tidak kena flood limit
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      ctx.reply(`✅ Broadcast selesai!\n\n✅ Terkirim : ${sukses}\n❌ Gagal : ${gagal}`, adminKeyboard());
+    }
+
+  } catch (err) {
+    console.log(err);
+    return ctx.reply("❌ Error broadcast");
+  }
+});
+
+// =========================
+// VIDEO (broadcast)
+// =========================
+
+bot.on("video", async (ctx) => {
+  try {
+    const session = userSessions[ctx.from.id];
+    if (!session) return;
+
+    if (session.step === "BROADCAST_WAIT") {
+      if (!isAdmin(ctx)) return;
+
+      delete userSessions[ctx.from.id];
+
+      const video = ctx.message.video;
+      const caption = ctx.message.caption || "";
+      const allUsers = await User.find({});
+
+      let sukses = 0;
+      let gagal = 0;
+
+      await ctx.reply(`📢 Broadcast dimulai...\nTotal: ${allUsers.length} user`);
+
+      for (const u of allUsers) {
+        try {
+          await bot.telegram.sendVideo(u.telegramId, video.file_id, { caption });
+          sukses++;
+        } catch (e) {
+          gagal++;
+        }
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      ctx.reply(`✅ Broadcast selesai!\n\n✅ Terkirim : ${sukses}\n❌ Gagal : ${gagal}`, adminKeyboard());
+    }
+
+  } catch (err) {
+    console.log(err);
+    return ctx.reply("❌ Error broadcast");
   }
 });
 
@@ -596,6 +806,35 @@ bot.on("text", async (ctx) => {
     const session = userSessions[ctx.from.id];
     if (!session) return;
 
+    // BROADCAST TEKS
+    if (session.step === "BROADCAST_WAIT") {
+      if (!isAdmin(ctx)) return;
+
+      delete userSessions[ctx.from.id];
+
+      const text = ctx.message.text;
+      const allUsers = await User.find({});
+
+      let sukses = 0;
+      let gagal = 0;
+
+      await ctx.reply(`📢 Broadcast dimulai...\nTotal: ${allUsers.length} user`);
+
+      for (const u of allUsers) {
+        try {
+          await bot.telegram.sendMessage(u.telegramId, text);
+          sukses++;
+        } catch (e) {
+          gagal++;
+        }
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      ctx.reply(`✅ Broadcast selesai!\n\n✅ Terkirim : ${sukses}\n❌ Gagal : ${gagal}`, adminKeyboard());
+      return;
+    }
+
+    // TXT FILENAME
     if (session.step === "TXT_FILENAME") {
       session.output = ctx.message.text;
       session.step = "TXT_CONTACT";
